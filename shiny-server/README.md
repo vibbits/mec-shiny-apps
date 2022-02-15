@@ -2,7 +2,7 @@ KUL/VIB Metabolomics Expertise Center -
 ![shiny-apps](pictures/shiny.png) - Interactive Shiny-Apps
 ==========
 
-*All tools presented below may contain bugs, please let me know if you find some. Each tool relies on dependencies normally listed at the top of the code (cpan for perl and cran for R will help you add them)*
+*All tools presented below may contain bugs, please let me know if you find some."
 
 For users, please refer to the accompanying readme file in the folder of the application for instructions for use.
 
