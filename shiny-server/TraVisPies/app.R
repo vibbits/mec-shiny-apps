@@ -26,7 +26,7 @@
 
 
 # Functions and libraries ---------------------------------------------------------------
-#libraries for shiny applicatin
+#libraries for shiny application
 library(shiny)
 library(shinyFeedback)   #for error messages on box
 library(shinyjs)      #for show/hide button
@@ -44,27 +44,36 @@ library(tidyr)        #for restructuring data tibbles
 library(extrafont)    #for being able to use available fonts on windows
 library(ggplot2)      #for generating the pie chart plots
 
-#required for zipping output files in web tool with rtools zip tool:
-#check if rtools path is set in .Renviron file yet (if that file exists at all),
-#set it and reread Renviron file if not
-if(!file.exists("~/.Renviron")) {
-  write('PATH="${RTOOLS40_HOME}\\usr\\bin;${PATH}"', file = "~/.Renviron",
-        append = TRUE)
-  readRenviron("~/.Renviron")
-} else {
-  if (!grepl('PATH=${RTOOLS40_HOME}\\usr\\bin;${PATH}',
-             read.delim("~/.Renviron"),fixed=T)) {
+#load the modules and  related functions
+source(here::here("Functions and modules/TraVis_InputCleaner.R"))
+source(here::here("Functions and modules/TraVis_input.R"))
+source(here::here("Functions and modules/TraVis_Visualisation.R"))
+source(here::here("Functions and modules/TraVis_output.R"))
+
+#Checks if fonts have been imported for use in charts, and imports if not
+#this can take a few minutes but should only run once ever on a platform
+check_install_fonts()
+
+#Some operations only for windows systems
+if (.Platform$OS.type=="windows") {
+  
+  
+  #required for zipping output files in web tool with rtools zip tool:
+  #check if rtools path is set in .Renviron file yet (if that file exists at all),
+  #set it and reread Renviron file if not
+  if(!file.exists("~/.Renviron")) {
     write('PATH="${RTOOLS40_HOME}\\usr\\bin;${PATH}"', file = "~/.Renviron",
           append = TRUE)
+    readRenviron("~/.Renviron")
+  } else {
+    if (!grepl('PATH=${RTOOLS40_HOME}\\usr\\bin;${PATH}',
+               read.delim("~/.Renviron"),fixed=T)) {
+      write('PATH="${RTOOLS40_HOME}\\usr\\bin;${PATH}"', file = "~/.Renviron",
+            append = TRUE)
+    }
+    readRenviron("~/.Renviron")
   }
-  readRenviron("~/.Renviron")
 }
-
-#load the modules and  related functions
-source(here::here("Functions and modules/TraVis_InputCleaner_V1.0.R"))
-source(here::here("Functions and modules/TraVis_input_V1.0.R"))
-source(here::here("Functions and modules/TraVis_Visualisation_V1.0.R"))
-source(here::here("Functions and modules/TraVis_output_V1.0.R"))
 
 #Do not change below setting unless you know what you are doing!
 #indicate whether local should be used, otherwise uses web version,
@@ -203,11 +212,13 @@ server <- function(input, output, session) {
     updateTabsetPanel(inputId = "wizard", selected = "Visualisation")
   })
 
-  # close the R session when Chrome closes
-  session$onSessionEnded(function() {
-    stopApp()
-    q("no")
-  })
+  # close the R session when Chrome closes if local
+  if (local_version) {
+    session$onSessionEnded(function() {
+      stopApp()
+      q("no")
+    })
+  }
 } 
 
 shinyApp(ui, server)

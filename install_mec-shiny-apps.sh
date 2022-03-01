@@ -20,7 +20,12 @@ apt-get install -y --no-install-recommends \
     libcairo2-dev \
     libxt-dev \
     xtail \
-    wget
+    wget #\
+    #after this Sam's added packages (only for shiny on ubuntu18.04, 
+    #no others needed)
+    #make \
+    #zlib1g-dev \
+
 
 # Install Shiny server
 wget --no-verbose "https://download3.rstudio.org/ubuntu-14.04/x86_64/shiny-server-${SHINY_SERVER_VERSION}-amd64.deb" -O ss-latest.deb
@@ -75,26 +80,21 @@ rm -rf /tmp/downloaded_packages
 ##    unixodbc-dev && \
 ##  rm -rf /var/lib/apt/lists/*
 
-#todo: r packages
+#r packages
 install2.r --error --skipinstalled \
-    shinyBS \
-    openxlsx \
-    VennDiagram \
+    shinyFeedback \
+    shinyjs \
+    shinyFiles \
     DT \
-    BiocManager \
-    pheatmap \
-    RColorBrewer \
-    seqinr \
-    scales \
-    ggplot2 \
+    colourpicker \
+    here \
+    vroom \
+    forcats \
+    dplyr \
     readr \
-    stringr \
-    data.table \
-    grid \
-    gridExtra \
-    lattice \
-    latticeExtra \
-    grDevices
+    tidyr \
+    extrafont \
+    ggplot2 
 
 ## a bridge to far? -- brings in another 60 packages
 # install2.r --error --skipinstalled -n $NCPUS tidymodels
