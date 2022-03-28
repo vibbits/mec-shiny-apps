@@ -20,11 +20,9 @@ apt-get install -y --no-install-recommends \
     libcairo2-dev \
     libxt-dev \
     xtail \
-    wget #\
-    #after this Sam's added packages (only for shiny on ubuntu18.04, 
-    #no others needed)
-    #make \
-    #zlib1g-dev \
+    wget \
+    make \
+    zlib1g-dev
 
 
 # Install Shiny server
@@ -33,7 +31,7 @@ gdebi -n ss-latest.deb
 rm ss-latest.deb
 
 # Get R packages
-install2.r --error --skipinstalled shiny rmarkdown
+install2.r --error --skipinstalled -r "https://packagemanager.rstudio.com/cran/__linux__/focal/2022-01-28" shiny rmarkdown
 
 # Set up directories and permissions
 #if [ -x "$(command -v rstudio-server)" ]; then
@@ -81,7 +79,8 @@ rm -rf /tmp/downloaded_packages
 ##  rm -rf /var/lib/apt/lists/*
 
 #r packages
-install2.r --error --skipinstalled \
+install2.r --error --skipinstalled -r "https://packagemanager.rstudio.com/cran/__linux__/focal/2022-01-28" \
+    REMOTES \ 
     shinyFeedback \
     shinyjs \
     shinyFiles \
@@ -95,6 +94,11 @@ install2.r --error --skipinstalled \
     tidyr \
     extrafont \
     ggplot2 
+    
+install2.r --error --skipinstalled -r "https://packagemanager.rstudio.com/cran/__linux__/focal/2020-06-04" \
+    extrafontdb \
+    extrafont \
+    Rttf2pt1
 
 ## a bridge to far? -- brings in another 60 packages
 # install2.r --error --skipinstalled -n $NCPUS tidymodels
