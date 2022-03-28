@@ -18,23 +18,10 @@ library(readr)        #for writing .csv file of merged output
 library(tidyr)        #for restructuring data tibbles
 library(ggplot2)      #for generating the pie chart plots
 
+#Need to install additional software for fonts using remotes package. 
 # Checks if fonts are imported fonts so they can be used in TraVis Pies
 # Imports fonts if not
-check_install_fonts<-function() {
-  #Need to install additional software for fonts using remotes package. 
-  
-  #Installs extrafont if not yet installed 
-  if (!require(extrafont)) {
-    install.packages("extrafont")
-    library(extrafont)
-    
-  } 
-  
-  if (length(fonts())>1) {
-    print("Fonts already imported")
-    return()
-  }
-  
+check_install_fonts<-function(import_dir=NULL) {
   #Installs remotes if not yet installed 
   if (!require(remotes)) {
     install.packages("remotes")
@@ -48,7 +35,6 @@ check_install_fonts<-function() {
     library(Rttf2pt1)
   }
   
-  
   #If rttf2pt installed but not the last known version of compatible with 
   #extrafont, uninstalls then uses remote to install the right version
   if (!packageVersion("Rttf2pt1")=="1.3.8") {
@@ -60,14 +46,33 @@ check_install_fonts<-function() {
     library(extrafont)
   }
   
+  #Installs extrafont if not yet installed 
+  if (!require(extrafont)) {
+    install.packages("extrafont")
+    library(extrafont)
+    
+  } 
+  
+  if (length(fonts())>1) {
+    print("Fonts already imported")
+    return()
+  }
+  
   
   #load font library. For windows only it loads these fonts for bitmap output
   # as well, not required for other operating systems. Don't load import library 
   # unless never done before on this system or unless 
   print(paste0("No font import detected, importing fonts (can take a few ",
   "minutes). Should only run once ever on a platform"))
-  font_import(prompt=F)
+  if (length(import_dir)==0) {
+    font_import(prompt=F)
+  } else {
+    font_import(import_dir,prompt=F)
+  }
+  loadfonts()
+  
 }
+
 
 # function for checking if any column cell contains non-NA data
 has_data <- function(x) { sum(!is.na(x)) > 0 } 

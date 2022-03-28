@@ -44,6 +44,14 @@ chown shiny:shiny /var/lib/shiny-server
 mkdir -p /var/log/shiny-server
 chown shiny:shiny /var/log/shiny-server
 
+# Doesn't work: Make standard linux truefonts available to shiny user
+# chown shiny:shiny /usr/share/fonts/truetype
+
+# Make truefonts available to shiny user as a copy
+mkdir -p /var/fonts/truetype
+cp -R /usr/share/fonts/truetype/* /var/fonts/truetype
+chown shiny:shiny /var/fonts/truetype
+
 # create init scripts
 mkdir -p /etc/services.d/shiny-server
 cat > /etc/services.d/shiny-server/run << 'EOF'
@@ -79,8 +87,11 @@ rm -rf /tmp/downloaded_packages
 ##  rm -rf /var/lib/apt/lists/*
 
 #r packages
+install2.r --error --skipinstalled -r "https://packagemanager.rstudio.com/cran/__linux__/focal/2020-06-04" \
+    Rttf2pt1
+
 install2.r --error --skipinstalled -r "https://packagemanager.rstudio.com/cran/__linux__/focal/2022-01-28" \
-    REMOTES \ 
+    remotes \
     shinyFeedback \
     shinyjs \
     shinyFiles \
@@ -93,13 +104,11 @@ install2.r --error --skipinstalled -r "https://packagemanager.rstudio.com/cran/_
     readr \
     tidyr \
     extrafont \
-    ggplot2 
-    
-install2.r --error --skipinstalled -r "https://packagemanager.rstudio.com/cran/__linux__/focal/2020-06-04" \
     extrafontdb \
-    extrafont \
-    Rttf2pt1
+    ggplot2 
 
+# Make standard linux truefonts available to shiny user
+# chown shiny:shiny /usr/local/lib/R/site-library/extrafontdb
 ## a bridge to far? -- brings in another 60 packages
 # install2.r --error --skipinstalled -n $NCPUS tidymodels
 
