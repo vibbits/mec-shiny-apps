@@ -31,6 +31,11 @@ system('fc-cache -f ~/.fonts')
 install.packages('r-lib/extrafontdb_1.0.tar.gz',type = 'source',repos = NULL)
 
 # Functions and libraries ---------------------------------------------------------------
+#Do not change below setting unless you know what you are doing!
+#indicate whether local version of code should be used, otherwise uses web version,
+#reason: change how output files should be saved (locally or with download)
+local_version<-F      #Do not change unless you know what you are doing!
+
 #libraries for shiny application
 library(shiny)
 library(shinyFeedback)   #for error messages on box
@@ -46,8 +51,8 @@ library(forcats)      #for factor manipulation
 library(dplyr)        #for faster.easier manipulation of data as tibbles
 library(readr)        #for writing .csv file of merged output
 library(tidyr)        #for restructuring data tibbles
-library(extrafont)    #for being able to use available fonts on windows
 library(ggplot2)      #for generating the pie chart plots
+library(extrafont)    #for using other fonts
 
 #load the modules and  related functions
 source(here::here("Functions and modules/TraVis_InputCleaner.R"))
@@ -57,11 +62,17 @@ source(here::here("Functions and modules/TraVis_output.R"))
 
 #Checks if fonts have been imported for use in charts, and imports if not
 #this can take a few minutes but should only run once ever on a platform
-check_install_fonts()
+if (local_version) {
+  check_install_fonts()
+} else {
+  check_install_fonts("/var/fonts/truetype")
+} 
 
 #Some operations only for windows systems
 if (.Platform$OS.type=="windows") {
-  
+  #for being able to use available fonts on windows
+  print("Windows only script being run")
+
   
   #required for zipping output files in web tool with rtools zip tool:
   #check if rtools path is set in .Renviron file yet (if that file exists at all),
@@ -80,10 +91,6 @@ if (.Platform$OS.type=="windows") {
   }
 }
 
-#Do not change below setting unless you know what you are doing!
-#indicate whether local should be used, otherwise uses web version,
-#reason: change how output files should be saved (locally or with download)
-local_version<-F      #Do not change unless you know what you are doing!
 
 #Wrapper main app-------------------------------------------------------------------
 #show inputmodule and vizmodule, unless the create new input button was pressed

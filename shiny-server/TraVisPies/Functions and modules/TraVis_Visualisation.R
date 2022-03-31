@@ -29,11 +29,10 @@ library(here)    #to make r source from file location instead of magic stuff
 source(here::here("Functions and modules/TraVis_Pies_functions.R"))
 
 #load font library. For windows only it loads these fonts for bitmap output
-# as well, not required for other operating systems. Don't load import library 
-# unless never done before on this system or unless 
-library(extrafont)
+#as well, not required for other operating systems. Don't  import library 
+#unless never done before on this system or unless 
 if (.Platform$OS.type=="windows") {
-   
+  library(extrafont)
   loadfonts(device="win",quiet = T)
 }
 
