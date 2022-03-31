@@ -1,4 +1,4 @@
-FROM rocker/r-ver:4.1.1
+FROM rocker/r-ver:4.1.2
 
 LABEL org.opencontainers.image.licenses="GPL-2.0-or-later" \
       org.opencontainers.image.source="https://github.com/vibbits/mec-shiny-apps" \
@@ -23,6 +23,7 @@ RUN /rocker_scripts/install_mec-shiny-apps.sh
 USER shiny 
 
 COPY --chown=shiny:shiny shiny-server/ /srv/shiny-server/
+COPY shiny-server.conf /etc/shiny-server/shiny-server.conf
 
 EXPOSE 3838
 

@@ -23,7 +23,12 @@
 # figures generated with desired settings from input data,
 # saved locally to provided folder
 
+dir.create('~/.fonts')
+file.copy("www/DejaVuSans.ttf", "~/.fonts")
+system('fc-cache -f ~/.fonts')
 
+.libPaths(c('r-lib', .libPaths()))
+install.packages('r-lib/extrafontdb_1.0.tar.gz',type = 'source',repos = NULL)
 
 # Functions and libraries ---------------------------------------------------------------
 #libraries for shiny application
