@@ -23,14 +23,15 @@
 # figures generated with desired settings from input data,
 # saved locally to provided folder
 
-dir.create('~/.fonts')
-file.copy("www/DejaVuSans.ttf", "~/.fonts")
-system('fc-cache -f ~/.fonts')
-
-.libPaths(c('r-lib', .libPaths()))
-install.packages('r-lib/extrafontdb_1.0.tar.gz',type = 'source',repos = NULL)
+# dir.create('~/.fonts')
+# file.copy("www/DejaVuSans.ttf", "~/.fonts")
+# system('fc-cache -f ~/.fonts')
+# 
+# .libPaths(c('r-lib', .libPaths()))
+# install.packages('r-lib/extrafontdb_1.0.tar.gz',type = 'source',repos = NULL)
 
 # Functions and libraries ---------------------------------------------------------------
+print(paste0("Starting at: ",Sys.time()))
 #Do not change below setting unless you know what you are doing!
 #indicate whether local version of code should be used, otherwise uses web version,
 #reason: change how output files should be saved (locally or with download)
@@ -52,28 +53,34 @@ library(dplyr)        #for faster.easier manipulation of data as tibbles
 library(readr)        #for writing .csv file of merged output
 library(tidyr)        #for restructuring data tibbles
 library(ggplot2)      #for generating the pie chart plots
-library(extrafont)    #for using other fonts
 
-#load the modules and  related functions
-source(here::here("Functions and modules/TraVis_InputCleaner.R"))
-source(here::here("Functions and modules/TraVis_input.R"))
-source(here::here("Functions and modules/TraVis_Visualisation.R"))
-source(here::here("Functions and modules/TraVis_output.R"))
+#load functions to support the app 
+source(here::here("Functions and modules/TraVis_Pies_functions.R"))
 
-#Checks if fonts have been imported for use in charts, and imports if not
-#this can take a few minutes but should only run once ever on a platform
+
 if (local_version) {
+  library(extrafont)    #for using other fonts
   check_install_fonts()
 } else {
-  check_install_fonts("/var/fonts/truetype")
+  
+  # specific for MEX linux server, install extrafontdb in accessible folder
+  # if it hasn't been done before
+  if (!dir.exists('~/.fonts')) {
+    dir.create('~/.fonts')
+    file.copy("www/DejaVuSans.ttf", "~/.fonts")
+    system('fc-cache -f ~/.fonts')
+    
+    .libPaths(c('r-lib', .libPaths()))
+    install.packages('r-lib/extrafontdb_1.0.tar.gz',type = 'source',repos = NULL)
+  }
+  
+  
+  library(extrafont)    #for using other fonts
+  check_install_fonts()
 } 
 
 #Some operations only for windows systems
 if (.Platform$OS.type=="windows") {
-  #for being able to use available fonts on windows
-  print("Windows only script being run")
-
-  
   #required for zipping output files in web tool with rtools zip tool:
   #check if rtools path is set in .Renviron file yet (if that file exists at all),
   #set it and reread Renviron file if not
@@ -91,7 +98,13 @@ if (.Platform$OS.type=="windows") {
   }
 }
 
+#load the modules
+source(here::here("Functions and modules/TraVis_InputCleaner.R"))
+source(here::here("Functions and modules/TraVis_input.R"))
+source(here::here("Functions and modules/TraVis_Visualisation.R"))
+source(here::here("Functions and modules/TraVis_output.R"))
 
+print(paste0("Ready for running at: ",Sys.time()))
 #Wrapper main app-------------------------------------------------------------------
 #show inputmodule and vizmodule, unless the create new input button was pressed
 #in the inputmodule, then show inputclean
@@ -151,14 +164,14 @@ server <- function(input, output, session) {
   create_v <- travis_cleaner_server("cleaner",local_version)
   v <- reactiveValues(active_tb=data.frame(NA))
   visual_v<-travis_viz_server("visual",reactive(v$active_tb))
-
+  
   #Switch to inputclean module if create button is pressed in input module
   #switch back once inputclean is marked as finished
   observeEvent(input_v$create_new,{
-                 if (input_v$create_new) {
-                   updateTabsetPanel(inputId = "wizard", 
-                                     selected = "InputClean")
-                 }
+    if (input_v$create_new) {
+      updateTabsetPanel(inputId = "wizard", 
+                        selected = "InputClean")
+    }
   })
   
   ####setting active table 
@@ -192,7 +205,7 @@ server <- function(input, output, session) {
     req(!is.na(v$active_tb[1,1]))
     visual_v<-travis_viz_server("visual",reactive(v$active_tb))
   })
-
+  
   #prepares output and enables continuing if all settings valid
   observe({
     disable("save_plots")
@@ -202,10 +215,10 @@ server <- function(input, output, session) {
     #structure for saving locally on server or through download
     if(local_version) {
       travis_outputlocal_server("output",v_settings = visual_v,
-                           tb = reactive(v$active_tb))
+                                tb = reactive(v$active_tb))
     } else {
       travis_outputweb_server("output",v_settings = visual_v,
-                                tb = reactive(v$active_tb))
+                              tb = reactive(v$active_tb))
     }
     
     enable("save_plots")
@@ -223,7 +236,7 @@ server <- function(input, output, session) {
   observeEvent(input$return_settings,{
     updateTabsetPanel(inputId = "wizard", selected = "Visualisation")
   })
-
+  
   # close the R session when Chrome closes if local
   if (local_version) {
     session$onSessionEnded(function() {

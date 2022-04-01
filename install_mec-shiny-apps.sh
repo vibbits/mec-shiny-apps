@@ -21,14 +21,15 @@ apt-get install -y --no-install-recommends \
     libxt-dev \
     xtail \
     wget \
-<<<<<<< HEAD
-    zlib1g-dev \
-    make 
-=======
     make \
     zlib1g-dev
+# <<<<<<< HEAD
+#     zlib1g-dev \
+#     make 
+# =======
+    
 
->>>>>>> 249bc36881b147f8a3f4119661e56b541a61afa3
+# >>>>>>> 249bc36881b147f8a3f4119661e56b541a61afa3
 
 # Install Shiny server
 wget --no-verbose "https://download3.rstudio.org/ubuntu-14.04/x86_64/shiny-server-${SHINY_SERVER_VERSION}-amd64.deb" -O ss-latest.deb
@@ -37,10 +38,10 @@ rm ss-latest.deb
 
 # Get R packages
 install2.r --error --skipinstalled -r "https://packagemanager.rstudio.com/cran/__linux__/focal/2022-01-28" shiny rmarkdown
-<<<<<<< HEAD
+# <<<<<<< HEAD
 #install2.r --error --skipinstalled shiny rmarkdown
-=======
->>>>>>> 249bc36881b147f8a3f4119661e56b541a61afa3
+# =======
+# >>>>>>> 249bc36881b147f8a3f4119661e56b541a61afa3
 
 # Set up directories and permissions
 #if [ -x "$(command -v rstudio-server)" ]; then
@@ -118,7 +119,7 @@ install2.r --error --skipinstalled -r "https://packagemanager.rstudio.com/cran/_
 
 # Make standard linux truefonts available to shiny user
 # chown shiny:shiny /usr/local/lib/R/site-library/extrafontdb
->>>>>>> 249bc36881b147f8a3f4119661e56b541a61afa3
+# >>>>>>> 249bc36881b147f8a3f4119661e56b541a61afa3
 ## a bridge to far? -- brings in another 60 packages
 # install2.r --error --skipinstalled -n $NCPUS tidymodels
 
