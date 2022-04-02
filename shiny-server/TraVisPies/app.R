@@ -65,16 +65,18 @@ if (local_version) {
   
   # specific for MEX linux server, install extrafontdb in accessible folder
   # if it hasn't been done before
-  if (!dir.exists('~/.fonts')) {
-    dir.create('~/.fonts')
-    file.copy("www/DejaVuSans.ttf", "~/.fonts")
-    system('fc-cache -f ~/.fonts')
-    
-    .libPaths(c('r-lib', .libPaths()))
-    install.packages('r-lib/extrafontdb_1.0.tar.gz',type = 'source',repos = NULL)
-  }
+  #if (!dir.exists('~/.fonts')) {
+  #  dir.create('~/.fonts')
+  #  file.copy("www/DejaVuSans.ttf", "~/.fonts")
+  #  system('fc-cache -f ~/.fonts')
+  #  
+  #  .libPaths(c('r-lib', .libPaths()))
+  #  install.packages('r-lib/extrafontdb_1.0.tar.gz',type = 'source',repos = NULL)
+  #}
   
-  
+  #
+  .libPaths(c('r-lib', .libPaths()))
+  library(extrafontdb) 
   library(extrafont)    #for using other fonts
   check_install_fonts()
 } 
