@@ -2,12 +2,12 @@
 
 @font-face {
     font-family: Dense;
-    src: url({{baseUrl}}/Dense-Regular.otf);
+    src: url(https://mec-shiny.vib.be/assets/fonts/Dense-Regular.otf);
 }
 
 @font-face {
     font-family: Dense-Bold;
-    src: url({{baseUrl}}/Dense-Bold.otf);
+    src: url(https://mec-shiny.vib.be/assets/fonts/Dense-Bold.otf);
 }
 
 /** Default settings **/
@@ -130,7 +130,7 @@ footer {
 .vib-bar-breadcrumb a.vib-main-site {
     padding: 10px 11px 10px 16px;
     overflow: hidden;
-    background: #1b2944 url({{baseUrl}}/chev_divider.png) no-repeat 100%;
+    background: #1b2944 url(https://mec-shiny.vib.be/assets/img/chev_divider.png) no-repeat 100%;
     transition: all 150ms ease;
 }
 
@@ -167,7 +167,7 @@ footer {
 }
 .banner {
     min-height: 220px;
-    background: #1b2944 url("{{baseUrl}}/banner.jpg") no-repeat 50% center;
+    background: #1b2944 url("https://mec-shiny.vib.be/assets/img/banner.jpg") no-repeat 50% center;
 }
 
 .vib-nav {
