@@ -17,15 +17,21 @@ RUN adduser --disabled-password --gecos '' --uid $USER_ID --gid $GROUP_ID shiny
 
 COPY install_mec-shiny-apps.sh /rocker_scripts/
 RUN ["chmod", "+x", "/rocker_scripts/install_mec-shiny-apps.sh"]
-
 RUN /rocker_scripts/install_mec-shiny-apps.sh
+
+COPY register_fonts.sh /rocker_scripts/
+RUN ["chmod", "ugo+x", "/rocker_scripts/register_fonts.sh"]
+
+COPY register_fonts.r /usr/local/bin/
+RUN ["chmod", "+x", "/usr/local/bin/register_fonts.r"]
 
 USER shiny 
 
 COPY --chown=shiny:shiny shiny-server/ /srv/shiny-server/
 COPY shiny-server.conf /etc/shiny-server/shiny-server.conf
 
+RUN /rocker_scripts/register_fonts.sh
+
 EXPOSE 3838
 
 CMD ["/init"]
-
