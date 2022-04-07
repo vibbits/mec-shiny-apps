@@ -30,6 +30,7 @@ library(shiny)
 library(vroom)   #for error messages on box
 library(forcats)      #for factor manipulation
 library(dplyr)        #for faster.easier manipulation of data as tibbles
+library(here)    #to find example datafiles
 
 
 #helper function for input module to check uploaded merged file for validity
@@ -82,26 +83,47 @@ travis_input_ui<- function(id) {
     ),
     
     #Input selection: upload existing merged file or create new
-    h3(paste0("Choose input method")),
-    fluidRow(
-      column(
-        3,actionButton(NS(id,"create_input"),
-                       label = "Create TraVis input file",
-                       style = "margin-top: 25px;margin-bottom: 25px;")
-      ),
-      column(
-        5,fileInput(NS(id,"upload_file"),
-                    "Upload previously created TraVis input files",
-                    accept = ".csv")
-      ),
-    ),  
-    textOutput(NS(id,"input_valid")),
-    verbatimTextOutput("check")
+    div(style="display:inline-block",h3(paste0("Choose input method"))),
+    div(style="display:inline-block; ",
+        actionButton(NS(id,"ui_showhide"), label = "show / hide")),
     
-    # tableOutput(NS(id,"inputtable"))
+    htmltools::div(
+      id=NS(id,"Input_options"),
+      fluidRow(
+        column(
+          5,
+          actionButton(NS(id,"create_input"),
+                         label = "Create TraVis input file from curated data",
+                         style = "margin-top: 25px;margin-bottom: 25px;")
+        ),
+        column(
+          3,
+          downloadButton(NS(id, "down_3file_example"),
+                           label = "Example input",
+                           style = "margin-top: 25px;margin-bottom: 25px;"),
+        ),
+      ),  
+      fluidRow(
+        column(
+          5,
+          fileInput(NS(id,"upload_file"),
+                    "Upload previously created TraVis input file",
+                    accept = ".csv")
+        ),
+        column(
+          3,
+          actionButton(NS(id,"demo_input"),
+                       label = "Use demo input",
+                       style = "margin-top: 25px;margin-bottom: 25px;"),
+        ),
+      ),  
+      textOutput(NS(id,"input_valid")),
+      verbatimTextOutput("check")
+      
+      # tableOutput(NS(id,"inputtable"))
+    )
   )
 }
-
 
 
 travis_input_server <- function(id) {
@@ -111,17 +133,36 @@ travis_input_server <- function(id) {
     v<-reactiveValues(create_new=F,
                       checked_upload_tb=data.frame(NA))
     
+    ###Show/hide input options
+    observeEvent(input$ui_showhide, {
+      if(input$ui_showhide %% 2 == 0){
+        shinyjs::show(id = "Input_options")
+      }else{
+        shinyjs::hide(id = "Input_options")
+      }
+    })
+    
     #Fileloading input data
     upload_tb<-reactive({
       vroom::vroom(input$upload_file$datapath,delim = ",",
                    show_col_types = FALSE)
     })
     
-    #set request to change
+    #Change reactive value create_new to true if creation of new file is
+    #requested
     observeEvent(input$create_input,{
       v$create_new<-T
     })
     
+    # Download example input files
+    output$down_3file_example = downloadHandler(
+      filename = '3file_example_input.zip',
+      content = function(file){
+        file.copy(here::here("Example_data/Input_3file_Example.zip"),
+                  file)
+      }
+    )
+  
     #Check if input file is valid
     output$input_valid<-renderText({
       req(nrow(upload_tb())>0)
@@ -134,6 +175,13 @@ travis_input_server <- function(id) {
       v$checked_upload_tb<-format_uploaded_table(upload_tb())
       
       return(validstring)
+    })
+    
+    #Use demo data if requested
+    observeEvent(input$demo_input,{
+      v$checked_upload_tb<-format_uploaded_table(
+        read_csv(here::here("Example_data/Input_Example_standardized.csv"))
+      )
     })
     
     return(v)
