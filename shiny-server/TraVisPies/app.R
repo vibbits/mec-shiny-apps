@@ -23,15 +23,7 @@
 # figures generated with desired settings from input data,
 # saved locally to provided folder
 
-# dir.create('~/.fonts')
-# file.copy("www/DejaVuSans.ttf", "~/.fonts")
-# system('fc-cache -f ~/.fonts')
-# 
-# .libPaths(c('r-lib', .libPaths()))
-# install.packages('r-lib/extrafontdb_1.0.tar.gz',type = 'source',repos = NULL)
-
 # Functions and libraries ---------------------------------------------------------------
-print(paste0("Starting at: ",Sys.time()))
 #Do not change below setting unless you know what you are doing!
 #indicate whether local version of code should be used, otherwise uses web version,
 #reason: change how output files should be saved (locally or with download)
@@ -106,11 +98,23 @@ source(here::here("Functions and modules/TraVis_input.R"))
 source(here::here("Functions and modules/TraVis_Visualisation.R"))
 source(here::here("Functions and modules/TraVis_output.R"))
 
-print(paste0("Ready for running at: ",Sys.time()))
 #Wrapper main app-------------------------------------------------------------------
 #show inputmodule and vizmodule, unless the create new input button was pressed
 #in the inputmodule, then show inputclean
 ui <- fluidPage(
+  #App explanation text
+  fluidRow(
+    column(
+      4,titlePanel(h1("Travis Pies v1.0"))
+      ),
+    column(
+      3,downloadButton(outputId= "down_manual",
+                       label = "User manual",
+                       style = "margin-top: 25px;margin-bottom: 25px;")
+    )
+  ),
+  htmlOutput("text"),
+  
   tabsetPanel(
     id = "wizard",
     type = "hidden",
@@ -119,10 +123,6 @@ ui <- fluidPage(
              travis_cleaner_ui("cleaner")
     ),
     tabPanel("Visualisation", 
-             #App explanation text
-             titlePanel(h1("Travis Pies v1.0")),
-             htmlOutput("text"),
-             
              travis_input_ui("input"),
              travis_viz_ui("visual"),
              
@@ -160,6 +160,15 @@ server <- function(input, output, session) {
            " generated for all compounds in the input data and saved in a ",
            "folder of choice <br/>")
   })
+  
+  #Download manual
+  output$down_manual = downloadHandler(
+    filename = "TraVis_Pies_manual.docx",
+    content = function(file){
+      file.copy(here::here("TraVis_Pies_manual.docx"),
+                file)
+    }
+  )
   
   #prepare reactive values
   input_v <- travis_input_server("input")
