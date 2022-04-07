@@ -272,7 +272,16 @@ travis_cleaner_ui <- function(id) {
     ),
     
     #App explanation text
-    titlePanel(h1("Travis Pies v1.0 Input creator")),
+    fluidRow(
+      column(
+        4, titlePanel(h2("Input Standardizer"))
+      ),
+      column(
+        3,downloadButton(outputId = (NS(id,"down_example")),
+                         label = "Example input",
+                         style = "margin-top: 25px;margin-bottom: 25px;")
+      )
+    ),
     htmlOutput(NS(id,"text")),
     
     #input files
@@ -406,6 +415,16 @@ travis_cleaner_server <- function(id,local_version=T) {
     v<-reactiveValues(merged_tb=data.frame(NA),
                       finished=F)
     
+    # Download example input files
+    output$down_example = downloadHandler(
+      filename = '3file_example_input.zip',
+      content = function(file){
+        print(here::here("Example_data/Input_3file_Example.zip"))
+        file.copy(here::here("Example_data/Input_3file_Example.zip"),
+                  file)
+      }
+    )
+
     #Write text to put on top as explanation, need to use server output to be able 
     #to write multiple lines
     output$text <- renderText({
@@ -417,7 +436,8 @@ travis_cleaner_server <- function(id,local_version=T) {
              "name column and their respective data columns named after the ",
              "compounds which they represent.<br/>Fractional contribution ",
              "data can be provided as a fraction between slightly less than 0 ",
-             "and 1 or a percentage between slightly less than 0% and 100%.",
+             "and 1 or a percentage between slightly less than 0% and 100%. ",
+             "12C controls should be in a separate cohort.",
              "<br/> Normalisation happens by dividing abundances by the ",
              "normalisation value provided.")
     })
