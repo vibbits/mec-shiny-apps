@@ -372,7 +372,11 @@ travis_viz_server <- function(id,tb) {
       choises_fac_levels<-unique(pull(tb(),input$factor))
       updateSelectInput(inputId = "fac_levels", choices = choises_fac_levels,
                         selected=choises_fac_levels)
-      updateCheckboxInput(inputId = "norm",value= F )
+      if ("NormAbund" %in% tb()$datatype) {
+        updateCheckboxInput(inputId = "norm",value= T )
+      } else {
+        updateCheckboxInput(inputId = "norm",value= F )
+      }
 
       #General layout
       updateNumericInput(inputId = "maxcol_facet",value = 4)
