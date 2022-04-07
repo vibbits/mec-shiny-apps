@@ -31,7 +31,7 @@ source(here::here("Functions and modules/TraVis_Pies_functions.R"))
 travis_outputsettings_ui <- function(id) {
   fluidPage(
     #App explanation text
-    titlePanel(h1("Travis Pies v1.0 Output")),
+    titlePanel(h2("Travis Pies v1.0 Output")),
     htmlOutput(NS(id,"text")),
 
     #Saving options
@@ -66,7 +66,9 @@ travis_outputsettings_server <- function(id,tb) {
     #to write multiple lines
     output$text <- renderText({
       paste0("<b>Apply settings from visualisation screen to all selected ",
-             "compounds output a plot for each.</b><br/><br/>")
+             "compounds and output plots as images. Pathway-compatible plots",
+             "never contain titles or legends regardless of settings.",
+             "</b><br/><br/>")
 
     })
 
