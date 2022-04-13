@@ -508,7 +508,9 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
   #contribution, then put together table with inputformat for pie function
   print(paste0("extracting compounddata"))
   
-  compound_tb<-obtain_compounddata(tb,compound,fact_name,fact_order = fact_order)
+  compound_tb<-obtain_compounddata(tb,compound,fact_name,
+                                   fact_order = fact_order,
+                                   normalize = normalize)
   
   #make table with summarized data in the right format for pie creation
   #each entry containing the needed info for one slice of one of the pie 
