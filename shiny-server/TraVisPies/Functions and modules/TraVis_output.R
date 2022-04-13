@@ -204,7 +204,6 @@ travis_outputlocal_server <- function(id,v_settings,tb) {
           incProgress(1/length(out_settings$compounds()), 
                       detail = printmessage)
           
-          
           generate_pie(tb(),compound=compound,detail_charts=detail_charts,
                        pathway_charts=pathway_charts,savepath=target_savepath,
                        normalize=v_settings$norm,fact_name=v_settings$fact_name,
@@ -272,8 +271,11 @@ travis_outputweb_server <- function(id,v_settings,tb) {
       content = function(file){
         filelist<-NULL
         
-        # Set temporary working directory
+        # Set temporary working directory, empty if already used before
         owd <- setwd( tempdir())
+        do.call(file.remove, list(list.files("Pie charts/", full.names = TRUE)))
+        do.call(file.remove, 
+                list(list.files("Pie charts pathway/", full.names = TRUE)))
         on.exit( {
           setwd( owd)
         })
@@ -311,7 +313,6 @@ travis_outputweb_server <- function(id,v_settings,tb) {
             incProgress(1/length(out_settings$compounds()), 
                         detail = printmessage)
             
-            
             generate_pie(tb(),compound=compound,detail_charts=detail_charts,
                          pathway_charts=pathway_charts,savepath=getwd(),
                          normalize=v_settings$norm,fact_name=v_settings$fact_name,
@@ -332,7 +333,9 @@ travis_outputweb_server <- function(id,v_settings,tb) {
                          legendtitlesize=v_settings$legendtitlesize,
                          cohortsize=v_settings$cohortsize,
                          include_legend=v_settings$include_legend,
-                         format=out_settings$format())
+                         format=out_settings$format(),
+                         mapotherfontsize = v_settings$otherfontsize,
+                         mapcohortsize = v_settings$cohortsize)
           }  
         })
         
