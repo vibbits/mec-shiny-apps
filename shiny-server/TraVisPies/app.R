@@ -28,7 +28,7 @@
 
 #indicate whether local version of code should be used, otherwise uses web version,
 #reason: change how output files should be saved (locally or with download)
-local_version<-T      
+local_version<-F      
 
 #closes the R session when the application window is closed. Only required
 #when running as a standalone app, could be annoying or troublesome otherwise
