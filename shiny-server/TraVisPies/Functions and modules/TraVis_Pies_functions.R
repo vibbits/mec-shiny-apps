@@ -533,7 +533,7 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
     pies<-make_piechart(slice_tb,fact_name = fact_name,
                         circlelinecolor = circlelinecolor,compound=compound,
                         circlelinetypes = circlelinetypes,
-                        maxcol_facet=maxcol_facet,
+                        maxcol_facet = maxcol_facet,
                         include_name = include_name,col_labeling = col_labeling,
                         alpha=alpha,font=font,otherfontsize = otherfontsize,
                         legendtitlesize =legendtitlesize,
@@ -555,11 +555,12 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
     pies<-make_piechart(slice_tb,fact_name = fact_name,
                         circlelinecolor = circlelinecolor,compound=compound,
                         circlelinetypes = circlelinetypes,include_name = F,
+                        maxcol_facet = maxcol_facet,
                         col_labeling = col_labeling,font=font,alpha=alpha,
                         otherfontsize = mapotherfontsize,
                         cohortsize = mapcohortsize,include_legend = F,
                         show_P=show_P)
-    
+
     #save summary pie chart for pathway if required
     plotfilefolder<-paste0(savepath,"/Pie charts pathway/")
     plotfilepath<-paste0(plotfilefolder,plotfilename)
