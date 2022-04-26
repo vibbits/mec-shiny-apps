@@ -23,12 +23,18 @@
 # figures generated with desired settings from input data,
 # saved locally to provided folder
 
-# Functions and libraries ---------------------------------------------------------------
+#Developer settings
 #Do not change below setting unless you know what you are doing!
+
 #indicate whether local version of code should be used, otherwise uses web version,
 #reason: change how output files should be saved (locally or with download)
-local_version<-F      #Do not change unless you know what you are doing!
+local_version<-T      
 
+#closes the R session when the application window is closed. Only required
+#when running as a standalone app, could be annoying or troublesome otherwise
+closeR_with_app<- F   
+
+# Functions and libraries ---------------------------------------------------------------
 #libraries for shiny application
 library(shiny)
 library(shinyFeedback)   #for error messages on box
@@ -55,18 +61,8 @@ if (local_version) {
   check_install_fonts()
 } else {
   
-  # specific for MEX linux server, install extrafontdb in accessible folder
-  # if it hasn't been done before
-  #if (!dir.exists('~/.fonts')) {
-  #  dir.create('~/.fonts')
-  #  file.copy("www/DejaVuSans.ttf", "~/.fonts")
-  #  system('fc-cache -f ~/.fonts')
-  #  
-  #  .libPaths(c('r-lib', .libPaths()))
-  #  install.packages('r-lib/extrafontdb_1.0.tar.gz',type = 'source',repos = NULL)
-  #}
-  
-  #
+  # specific for MEC linux server, install add extrafontdb folder to 
+  #library paths
   .libPaths(c('r-lib', .libPaths()))
   library(extrafontdb) 
   library(extrafont)    #for using other fonts
@@ -106,7 +102,7 @@ ui <- fluidPage(
   fluidRow(
     column(
       4,titlePanel(h1("Travis Pies v1.0"))
-      ),
+    ),
     column(
       3,downloadButton(outputId= "down_manual",
                        label = "User manual",
@@ -248,8 +244,8 @@ server <- function(input, output, session) {
     updateTabsetPanel(inputId = "wizard", selected = "Visualisation")
   })
   
-  # close the R session when Chrome closes if local
-  if (local_version) {
+  # close the R session when app window closes if local
+  if (closeR_with_app) {
     session$onSessionEnded(function() {
       stopApp()
       q("no")
