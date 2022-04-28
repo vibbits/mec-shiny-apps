@@ -1,4 +1,4 @@
-# mec-shiny-apps
+# Using MEC shiny applications
 
 This Github bundles VIB-KULeuven Metabolomics Expertise Center (MEC) apps and is used for deploying their web version.  
 -To use the web version of the apps, visit https://mec-shiny.vib.be/  
