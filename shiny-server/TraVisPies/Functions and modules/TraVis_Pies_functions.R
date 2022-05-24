@@ -8,10 +8,14 @@
 # charts. Called in modules of TraVis pies, but not inherently linked to R shiny
 # functionality and could be used and useful outside shiny framework.
 
+#todo
+#Summarize extracted isotopologue data as a single string entry per sample
+#containing all contribution from lowest to highest isotopologue in order separated by |
 
 # Functions and libraries ---------------------------------------------------------------
 #libraries for UI
-library(dplyr)        #for faster.easier manipulation of data as tibbles
+library(dplyr)        #for faster.easier manipulation of data
+library(tibble)       #for manipulating tibbles
 library(vroom)        #for easier file loading
 library(forcats)      #for factor manipulation
 library(readr)        #for writing .csv file of merged output
@@ -101,6 +105,38 @@ read_csv_clean<- function(file,remove_empty=FALSE,perc_to_num=T){
   return(input_tb)
 }
 
+#function to check escher-trace like corrected isotopologue input data
+#returns "OK" if all checks are passed, error message otherwise
+# tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_Isotopologues.csv",
+#                         remove_empty = F,perc_to_num = F)
+# head(tb)
+# check_iso_input(tb)
+# modtb<-tb
+# modtb[2,2]<-"Abundance"
+# head(modtb)
+# check_iso_input(modtb)
+# any(i(filter(modtb,Fragment=="Abundance")$Metabolite)==0)# debug(check_iso_input)
+
+check_iso_input<-function(tb){
+  if (colnames(tb)[1]!= "Metabolite") return(
+    paste0("The first column in the isotopologue input should be named ",
+           "Metabolite"))
+  
+  if (colnames(tb)[2]!= "Fragment") return(
+    paste0("The second column in the isotopologue input should be named ",
+           "Fragment"))
+  if (any(filter(tb,nchar(Metabolite)>0)$Fragment!="Abundance")) return(
+    paste0("At least one Metabolite entry is not in a row with abundance data.",
+           " Only include these entries in rows containing your fragment ",
+           "abundance marked by setting the Fragment entry to 'Abundance'"))
+  if (any(is.na(filter(tb,Fragment=="Abundance")$Metabolite))) return(
+    paste0("At least one abundance data row does not contain a Metabolite ",
+           "entry. Always include these entries in rows containing your ",
+           "fragment abundance"))
+  return("OK")
+}
+
+
 #function to prepare metadata to uniform format
 format_metadata<-function(meta_tb,sample_column,factor_column,norm_column) {
   sample_symbol<-rlang::sym(sample_column)
@@ -139,8 +175,228 @@ format_metadata<-function(meta_tb,sample_column,factor_column,norm_column) {
   return(meta_tb)
 }
 
-# function to merge different input files into a tibble with all info needed
-# to generate pies for all compounds
+#function to check which elements are common among all vectors
+get_common_elements<-function(...){
+  #list all input objects, check if all elements are vectors
+  vectorlist<-list(...)
+  for(i in vectorlist) {
+    if (!is.atomic(i)) stop(paste0(i," is not an atomic vector. "))
+    if (is.matrix((i))) stop(paste0(i," is a matrix, not an atomic vector."))
+  }
+  
+  #obtain elements common to all vectors in list
+  Reduce(intersect, vectorlist)
+}
+
+#transpose tibble, setting colnames to first column and first column to colnames
+t_tibble<-function(tb,first_colname="first_column"){
+  
+  #delete first column that will become the column names
+  trans_tb<-select(tb,-1)%>%
+    t()
+  
+  #Clean rownames and set colnames correctly, then save as tibble and add 
+  #sample name column, 
+  row.names(trans_tb)<-NULL
+  colnames(trans_tb)<-pull(tb,1)
+  trans_tb<-as_tibble(trans_tb) %>% 
+    mutate(!!first_colname := colnames(tb)[-1],.before=1)
+}
+
+#Extract rowwise isotopologue data from columnwise corrected isotopologue
+#file, for faster fractional contribution calculation and generation of 
+#summarized isotopologue text for later
+#specify correct isotopologue suffix separator, character used to separate the 
+#metabolite name from the isotopologue label in the input isotopologue
+#column names. This character can be used in metabolite name withotu issue, but 
+#not in the isotopologue label
+extract_col_isotopologues<-function(iso_col_tb,iso_suffix_sep="_") {
+  #Add column with metabolite name extracted from isotopologue name based on
+  #given suffix, then rename Isotopologues from 0 to highest isotopologue per 
+  #metabolite
+  iso_col_tb %>% t_tibble(first_colname = "Isotopologue") %>%
+    #required to apply all functions (esp max) to current row only
+    rowwise() %>%    
+    mutate(Metabolite=
+             substr(Isotopologue,1,
+                    max(gregexpr(iso_suffix_sep,
+                                 Isotopologue,fixed = T)[[1]])-1),
+           .before=1) %>%
+    group_by(Metabolite) %>%
+    #n() gives the current group size
+    mutate(Isotopologue=seq(from=0,to=n()-1,by=1)) %>%
+    ungroup()
+}
+
+#Extract abundance data in columns from Escher-Trace like corrected isotopologue
+#file
+extract_et_abund<-function(iso_et_tb,sample_colname="Sample"){
+  abund_tb<-filter(iso_et_tb,!is.na(Metabolite)) %>%
+    t_tibble(first_colname = sample_colname) %>%
+    slice(-c(1)) %>%
+    mutate(across(!(!!sample_colname),.fns= as.numeric))
+}
+
+#Extract isotopologue data from Escher-Trace like corrected isotopologue
+#file, keeping them in rows for faster fractional contribution calculation
+#and generation of summarized isotopologue text for later
+extract_et_isotopologues<-function(iso_et_tb){
+  #Prepare isotopologue column
+  iso_et_tb<-add_column(iso_et_tb,Isotopologue=NA,.before = 2)
+  
+  
+  #note metabolite and isotopologue name for every isotopologue
+  for (i in 1:nrow(iso_et_tb)) {
+    if (!is.na(iso_et_tb$Metabolite[i])) {
+      
+      #if encountering new metabolite, save name and (re)set isotopologue
+      #to 0 to prepare for first isotopologue coming up
+      metabolite<-iso_et_tb$Metabolite[i]
+      isotopologue<-0
+    } else {
+      #add metabolite name for this isotopologue in metabolite column and
+      #and set isotopologue to current isotopologue index
+      #for ordering purposes
+      iso_et_tb$Metabolite[i]<-metabolite
+      iso_et_tb$Isotopologue[i]<-isotopologue
+      
+      #increase isotopologue count
+      isotopologue<-isotopologue+1
+    }
+  }
+  #delete Fragment column and abundance entries
+  iso_tb<-select(iso_et_tb,!c(Fragment)) %>%
+    filter(!is.na(Isotopologue))
+}
+
+
+#Calculates a columnwise FC table based on an extracted isotopologue table
+#can specify sample column name
+calculate_FC<-function(iso_tb,sample_colname="Sample"){
+  #calculate FC table, then reformat to columnwise format
+  iso_tb %>% group_by(Metabolite) %>%
+    summarise(across(!Isotopologue,
+                     .fns = ~ sum(.x*Isotopologue)/max(Isotopologue))) %>%
+    t_tibble(first_colname = sample_colname)
+}
+
+#Function to check samples across meta, abundance and FC tibbles and check
+# compounds present. Outputs a list noting whether an error message should
+# be given, and a message containing the error message or in absence
+# of the error any warning messages to display
+check_samples_compounds<-function(meta_tb,abund_tb,frac_tb,sample_column,
+                                        norm_column){
+  #set error =T by default, will change once past all error checks
+  outlist<-list(error=T,message=NULL)
+  
+  #Check if all samples in meta table are present abund table
+  samples_miss_abund<-!all(pull(meta_tb,sample_column) %in%
+                             pull(abund_tb,sample_column))
+  if (samples_miss_abund) {
+    outlist$message<-paste0("Sample from metadata file missing in abund file. ",
+                            "If the correct sample column is chosen, verify samples ",
+                            "and sample names in both files.")
+    return(outlist)
+  }
+  
+  #Check if all samples in meta table are present frac table
+  samples_miss_frac<-!all(pull(meta_tb,sample_column) %in%
+                            pull(frac_tb,sample_column))
+  if (samples_miss_frac) {
+    outlist$message<-paste0("Sample from metadata file missing in frac file. ",
+                            "If the correct sample column is chosen, verify samples ",
+                            "and sample names in both files.")
+    return(outlist)
+  }
+  
+  #check if normalisation column is numeric if there is a column specified
+  if (norm_column != "None") {
+    if (!is.numeric(pull(meta_tb,norm_column))) {
+      outlist$message<-paste0("The chosen normalisation column does not contain ",
+                              "numbers. Please pick the right column or check the ",
+                              "input if this is it.")
+      return(outlist)
+    }
+  }
+  
+  #no errors encountered, set outlist$error to false
+  outlist$error<-F
+  
+  #Warn if more samples present in abund or frac file than in meta
+  samples_ignored<-!all( abund_tb[,sample_column] %in%
+                           meta_tb[,sample_column],
+                         frac_tb[,sample_column] %in%
+                           meta_tb[,sample_column])
+  if (samples_ignored) {
+    outlist$message<-
+      c(outlist$message,
+        paste0("Samples from abund and or frac file missing in ",
+               "metadatafile. These samples will be removed from the ",
+               "analysis."))
+  }
+  #Warn if compounds present in abund file not frac file 
+  #will be 100% unlabeled
+  comp_ab_only<-colnames(abund_tb)[which(!colnames(abund_tb)%in%
+                                           colnames(frac_tb))]
+  if (length(comp_ab_only)>0) {
+    outlist$message<-
+      c(outlist$message,
+        paste0("Following compounds only in abundance file, will be ",
+               "considered fully unlabeled: ",
+               paste(comp_ab_only,collapse = ", ")))
+  }
+  
+  #Warn if compounds present in frac file not abund file
+  #will be removed
+  comp_fc_only<-colnames(frac_tb)[which(!colnames(frac_tb)%in%
+                                          colnames(abund_tb))]
+  if (length(comp_fc_only)>0) {
+    outlist$message<-
+      c(outlist$message,
+        paste0("Following compounds only in fractional contribution file, ",
+               " will be removed: ",
+               paste(comp_fc_only,collapse = ", ")))
+  }
+  
+  #Warn if compounds have 0 abundance in every sample, they will be dropped
+  compounds_notdetected<-colnames(
+    select(abund_tb,-where(has_nonzero))
+  )
+  
+  if (length(compounds_notdetected)>0) {
+    outlist$message<-
+      c(outlist$message,
+        paste0("Following compounds are never detected (abundance always 0), ",
+               " and will be removed: ",
+               paste(compounds_notdetected,collapse = ", ")))
+  }
+  
+  #return empty text if no warnings, else give them in single orange text (html)
+  if (length(outlist$message)>0) {
+    outlist$message<-paste("<b><p style='color:orange'>Warning: </b>",
+                           outlist$message,
+                           "</p>", sep = "<br/>")
+  } else {
+    outlist$message<-""
+  }
+  return(outlist)
+}
+
+#Summarize extracted isotopologue data as a single row per sample 
+#containing for each metabolite a string with all contributions from lowest to 
+#highest isotopologue in order separated by |
+summarize_isotopologue<-function(iso_tb,sample_colname="Sample"){
+  #remove isotopologue column, group per metabolite and generate single string
+  #per metabolite for each sample
+  #then transpose from rowwise to columnwise representation
+  iso_tb %>% select(-Isotopologue) %>%
+    group_by(Metabolite) %>%
+    summarize(across(.fns = ~ paste0(.x,collapse = "|"))) %>%
+    t_tibble(first_colname = sample_colname)
+}
+
+# function to merge metadata, abundance and FC input files into a tibble 
+# with all info needed to generate pies for all compounds
 merge_input<-function(meta_tb,abund_tb,fraccon_tb,sample_col="Sample",
                       compounds) {
   
@@ -204,6 +460,73 @@ merge_input<-function(meta_tb,abund_tb,fraccon_tb,sample_col="Sample",
   return(tb)
 }
 
+# function to merge metadata and isotopologue input files into a tibble 
+# with all info needed to generate pies for all compounds
+merge_inputmerge_input_2file<-function(meta_tb,iso_tb,sample_col="Sample",
+                                       compounds) {
+  
+  
+  #rename sample column in metadata
+  meta_tb<-rename(meta_tb,Sample=all_of(sample_col))
+  
+  #Get abundance info from isotopologue table
+  
+  
+  
+  #add metadata to abundance and fractional contribution data respectively
+  #retaining only selected samples, and drop metabolites with 0 abundance
+  #in every sample to avoid errors
+  abund_tb<-left_join(meta_tb,abund_tb,by="Sample") %>%
+    select(1:ncol(meta_tb),any_of(compounds)) %>%
+    select_if(has_nonzero)
+  
+  fraccon_tb<-left_join(meta_tb,fraccon_tb,by="Sample") %>%
+    select(1:ncol(meta_tb),any_of(colnames(abund_tb))) 
+  
+  #add fractional contribution equal to 100% unlabeled to compounds in abundance
+  #but not fraction labeling table
+  if (any(!colnames(abund_tb) %in% colnames(fraccon_tb))) {
+    nolabnames<-colnames(abund_tb)[which(! colnames(abund_tb) %in%
+                                           colnames(fraccon_tb))]
+    for (i in nolabnames) {
+      fraccon_tb$new<-0
+      colnames(fraccon_tb)[ncol(fraccon_tb)]<-i
+    }
+  }
+  
+  #Per compound adapt FC's below 0 (artefacts due to natural abundance 
+  #correction) to be positive to avoid problems with the visualisations
+  #later on
+  for (i in (ncol(meta_tb)+1):ncol(fraccon_tb)) {
+    if (any(fraccon_tb[,i]<0)) {
+      FCs<-pull(fraccon_tb[,i])
+      FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)])     
+      fraccon_tb[,i]<-FCs
+    }
+  }
+  
+  #prepare tables for joining and join, then order
+  fraccon_tb$datatype<-"FracCont"
+  abund_tb$datatype<-"Abund"
+  tb<-full_join(fraccon_tb,abund_tb,by=colnames(abund_tb)) %>%
+    select(colnames(meta_tb),datatype,everything())
+  
+  
+  #add normalized abundances if normalization column provided
+  #then remove normalisation factor
+  if ("Normalisation" %in% colnames(meta_tb)) {
+    normabund_tb<-tb %>% 
+      filter(datatype=="Abund") %>%
+      mutate(across((ncol(meta_tb)+2):ncol(tb),
+                    function(x) x/Normalisation))
+    normabund_tb$datatype<-"NormAbund"            
+    
+    tb<-full_join(tb,normabund_tb,by=colnames(tb)) %>%
+      select(-Normalisation)
+  }
+  
+  return(tb)
+}
 #Extract data for one compound in merged input, only for desired factor
 #levels and set factor order
 #need to use !! for dynamic variable names in tidyverse selection
@@ -602,4 +925,65 @@ generate_multiple_pies<-function(tb,compounds,detail_charts,pathway_charts,savep
   }  
   print("Finished")
 }
+
+
+# To keep for later --------------------------------------------------------------------
+####salvage for function for generating isotopologue labels fit for ordering
+# for (i in 1:nrow(iso_et_tb)) {
+#   if (!is.na(iso_et_tb$Metabolite[i])) {
+#     
+#     #if encountering new metabolite, save name and (re)set isotopologue
+#     #to 0 to prepare for first isotopologue coming up
+#     metabolite<-iso_et_tb$Metabolite[i]
+#     isotopologue<-0
+#     
+#     #count how many isotopologues for this metabolite, note how many digits
+#     #for unanimous counting
+#     count<-0
+#     while(is.na(iso_et_tb$Metabolite[i+count+1]) & 
+#           (i+count+1)<=nrow(iso_et_tb)) {
+#       count<-count+1
+#     }
+#     maxdigit<-floor(log10(count))+1  
+#   } else {
+#     #add metabolite name for this isotopologue in metabolite column and
+#     #and set isotopologue suffix to M0 if first isotopologue, and otherwise to 
+#     #MX with X the current isotope number having the same amount of digits as 
+#     #the highest isotopologue adding preceding 0's as neccesary
+#     #for ordering purposes
+#     iso_et_tb$Metabolite[i]<-metabolite
+#     if (isotopologue==0) {
+#       isotext<-paste0("_M",isotopologue)
+#       
+#     } else {
+#       isotext<-paste0("_M",
+#                       paste0(rep(0,maxdigit-(floor(log10(isotopologue))+1)),
+#                              collapse = ""),
+#                       isotopologue)
+#     }
+#     #join metabolite name and isotopologue suffix
+#     iso_et_tb$Isotopologue[i]<- paste0(metabolite,isotext)
+#     
+#     #increase isotopologue count
+#     isotopologue<-isotopologue+1
+#   }
+# }
+# Test --------------------------------------------------------------------
+meta_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_metadata.csv",
+                        remove_empty = T,perc_to_num = F)
+iso_et_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_RA+isotopologues.csv",
+                       remove_empty = F,perc_to_num = F)
+iso_col_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_isotopologues.csv",
+                           remove_empty = T,perc_to_num = T)
+iso_tb<-extract_et_isotopologues(iso_et_tb)
+
+iso_tb<-extract_col_isotopologues(iso_col_tb)
+
+frac_tb<-calculate_FC(iso_tb)
+
+head(iso_tb)
+
+
+head(summarize_isotopologue(iso_tb))
+test<-summarize_isotopologue(iso_tb)
 

@@ -34,6 +34,20 @@ local_version<-F
 #when running as a standalone app, could be annoying or troublesome otherwise
 closeR_with_app<- F   
 
+
+
+###TODO delete plan
+#isotopologues
+#allow inputcleaner to function when uploading escher type isotopologue data
+#adapt input module text to show escher type data is possible,
+#remove input type examples there
+#If isotopologue data present, add option to add isotopologue significance to group label
+#If isotopologue significance requested, Calculate isotopologue significances, 
+#save most significant
+
+#abundance logscale
+#allow to display abundances on log scale
+
 # Functions and libraries ---------------------------------------------------------------
 #libraries for shiny application
 library(shiny)
@@ -47,7 +61,8 @@ library(colourpicker) #to allow colours to be chosen
 library(here)    #to make r source from file location instead of magic stuff
 library(vroom)   #for error messages on box
 library(forcats)      #for factor manipulation
-library(dplyr)        #for faster.easier manipulation of data as tibbles
+library(dplyr)        #for faster.easier manipulation of data
+library(tibble)       #for manipulating tibbles
 library(readr)        #for writing .csv file of merged output
 library(tidyr)        #for restructuring data tibbles
 library(ggplot2)      #for generating the pie chart plots
