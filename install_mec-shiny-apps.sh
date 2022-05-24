@@ -100,6 +100,7 @@ install2.r --error --skipinstalled -r "https://packagemanager.rstudio.com/cran/_
     vroom \
     forcats \
     dplyr \
+	tibble \
     readr \
     tidyr \
     extrafont \
