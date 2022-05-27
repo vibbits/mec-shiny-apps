@@ -116,7 +116,7 @@ ui <- fluidPage(
   #App explanation text
   fluidRow(
     column(
-      4,titlePanel(h1("Travis Pies v1.0"))
+      4,titlePanel(h1("Travis Pies v1.2"))
     ),
     column(
       3,downloadButton(outputId= "down_manual",

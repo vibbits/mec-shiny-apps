@@ -18,6 +18,9 @@
 # This object also includes an element called ready that is FALSE until 
 # valid settings were chosen
 
+#todo: test with standardized with missing lactic isotopologue string replaced
+#by "1" in all samples
+
 # Functions and libraries ---------------------------------------------------------------
 library(here)    #to make r source from file location instead of magic stuff
 library(shiny)

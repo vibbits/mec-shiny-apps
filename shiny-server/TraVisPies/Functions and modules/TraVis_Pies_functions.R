@@ -395,15 +395,64 @@ summarize_isotopologue<-function(iso_tb,sample_colname="Sample"){
     t_tibble(first_colname = sample_colname)
 }
 
-# function to merge metadata, abundance and FC input files into a tibble 
-# with all info needed to generate pies for all compounds
-merge_input<-function(meta_tb,abund_tb,fraccon_tb,sample_col="Sample",
-                      compounds) {
+merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
+                          sample_col="Sample",compounds) {
+
+  #Per compound adapt FC's below 0 (artefacts due to natural abundance
+  #correction) to be positive to avoid problems with the visualisations
+  #later on
+  for (i in (2:ncol(frac_tb))) {
+    if (any(frac_tb[,i]<0)) {
+      FCs<-pull(frac_tb[,i])
+      FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)])     
+      frac_tb[,i]<-FCs
+    }
+  }
+  
+  #modify iso_tb if it exists before summarizing
+  if (length(iso_tb)>0) {
+    #Per compound adapt isotopologues's below 0 (artefacts due to natural abundance 
+    #correction) to be positive to avoid problems with the visualisations
+    #later on
+    for (i in (2:nrow(iso_tb))) {
+      if (any(iso_tb[i,]<0)) {
+        #check if any value for this isotopologue below 0
+        metabolite<-iso_tb$Metabolite[i]
+        isos<-iso_tb[i,-c(1,2)]
+        negisos<-which(isos<0)
+        
+        #if no values negative, skip this section to avoid empty reference  
+        #warnings and useless computing. If negatives, no zero correction was done
+        #before and should be done now
+        if (length(negisos)>0) {
+          #Make variable containing negative iso value and 0 for others
+          #then overwrite negative iso values to 0
+          toadd<-isos
+          toadd[-negisos]<-0
+          isos[negisos]<-0   
+          iso_tb[i,-c(1,2)]<-isos
+          
+          #add negative iso values to parent to offset previous addition to 
+          #parent to compensate negative values
+          parent_index<-which(iso_tb$Metabolite==metabolite & 
+                                iso_tb$Isotopologue==0)
+          iso_tb[parent_index,-c(1,2)]<-iso_tb[parent_index,-c(1,2)]+toadd
+          
+          #if any parents became <0, set to 0 (likely parent was undetectable)
+          iso_tb[parent_index,][which(iso_tb[parent_index,]<0)]<-0
+        }
+        
+      }
+    }
+    
+    #summarize isotopologue data with name sample column
+    iso_tb<-summarize_isotopologue(iso_tb,sample_colname = sample_col)
+  }
   
   #rename sample column in all inputs
   meta_tb<-rename(meta_tb,Sample=all_of(sample_col))
   abund_tb<-rename(abund_tb,Sample=all_of(sample_col))
-  fraccon_tb<-rename(fraccon_tb,Sample=all_of(sample_col))
+  frac_tb<-rename(frac_tb,Sample=all_of(sample_col))
   
   #add metadata to abundance and fractional contribution data respectively
   #retaining only selected samples, and drop metabolites with 0 abundance
@@ -412,121 +461,64 @@ merge_input<-function(meta_tb,abund_tb,fraccon_tb,sample_col="Sample",
     select(1:ncol(meta_tb),any_of(compounds)) %>%
     select_if(has_nonzero)
   
-  fraccon_tb<-left_join(meta_tb,fraccon_tb,by="Sample") %>%
+  frac_tb<-left_join(meta_tb,frac_tb,by="Sample") %>%
     select(1:ncol(meta_tb),any_of(colnames(abund_tb))) 
   
-  #add fractional contribution equal to 100% unlabeled to compounds in abundance
-  #but not fraction labeling table
-  if (any(!colnames(abund_tb) %in% colnames(fraccon_tb))) {
+  if(!length(iso_tb)==0) {
+    iso_tb<-left_join(meta_tb,iso_tb,by="Sample") %>%
+      select(1:ncol(meta_tb),any_of(colnames(abund_tb)))
+  }
+  
+  #add fractional contribution and isotopologues equal to 100% unlabeled to 
+  #compounds in abundance but not fraction labeling table
+  if (any(!colnames(abund_tb) %in% colnames(frac_tb))) {
     nolabnames<-colnames(abund_tb)[which(! colnames(abund_tb) %in%
-                                           colnames(fraccon_tb))]
+                                           colnames(frac_tb))]
     for (i in nolabnames) {
-      fraccon_tb$new<-0
-      colnames(fraccon_tb)[ncol(fraccon_tb)]<-i
+      frac_tb$new<-0
+      colnames(frac_tb)[ncol(frac_tb)]<-i
+    }
+    if(!length(iso_tb)==0) {
+      for (i in nolabnames) {
+        iso_tb$new<-"1"
+        colnames(iso_tb)[ncol(iso_tb)]<-i
+      }
     }
   }
   
-  #Per compound adapt FC's below 0 (artefacts due to natural abundance 
-  #correction) to be positive to avoid problems with the visualisations
-  #later on
-  for (i in (ncol(meta_tb)+1):ncol(fraccon_tb)) {
-    if (any(fraccon_tb[,i]<0)) {
-      FCs<-pull(fraccon_tb[,i])
-      FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)])     
-      fraccon_tb[,i]<-FCs
-    }
-  }
-  
-  #prepare tables for joining and join, then order
-  fraccon_tb$datatype<-"FracCont"
-  abund_tb$datatype<-"Abund"
-  tb<-full_join(fraccon_tb,abund_tb,by=colnames(abund_tb)) %>%
-    select(colnames(meta_tb),datatype,everything())
-  
-  
-  #add normalized abundances if normalization column provided
-  #then remove normalisation factor
+  #calculate normalized abundances if normalization column provided
   if ("Normalisation" %in% colnames(meta_tb)) {
-    normabund_tb<-tb %>% 
-      filter(datatype=="Abund") %>%
-      mutate(across((ncol(meta_tb)+2):ncol(tb),
+    normabund_tb<-abund_tb %>% 
+      mutate(across((ncol(meta_tb)+1):ncol(abund_tb),
                     function(x) x/Normalisation))
     normabund_tb$datatype<-"NormAbund"            
     
-    tb<-full_join(tb,normabund_tb,by=colnames(tb)) %>%
-      select(-Normalisation)
   }
+  
+  
+  
+  #prepare tables for joining and join, then order and remove normalisation factor
+  abund_tb <-abund_tb %>% mutate(across(-c(1:3),as.character)) %>%
+    add_column(datatype="Abund")
+  normabund_tb <-normabund_tb %>% mutate(across(-c(1:3),as.character)) 
+  frac_tb <-frac_tb %>% mutate(across(-c(1:3),as.character)) %>%
+    add_column(datatype="FracCont")
+  
+  fracold_tb<-frac_tb
+  if(!length(iso_tb)==0) {
+    iso_tb$datatype<-"Isotopologues"
+    frac_tb<-full_join(frac_tb,iso_tb,by=colnames(frac_tb))
+  }
+  
+  tb<-full_join(frac_tb,abund_tb,by=colnames(abund_tb))
+  
+  tb<-full_join(tb,normabund_tb,by=colnames(tb)) %>%
+    select(colnames(meta_tb),-Normalisation,datatype,everything())
   
   return(tb)
 }
 
-# function to merge metadata and isotopologue input files into a tibble 
-# with all info needed to generate pies for all compounds
-merge_inputmerge_input_2file<-function(meta_tb,iso_tb,sample_col="Sample",
-                                       compounds) {
-  
-  
-  #rename sample column in metadata
-  meta_tb<-rename(meta_tb,Sample=all_of(sample_col))
-  
-  #Get abundance info from isotopologue table
-  
-  
-  
-  #add metadata to abundance and fractional contribution data respectively
-  #retaining only selected samples, and drop metabolites with 0 abundance
-  #in every sample to avoid errors
-  abund_tb<-left_join(meta_tb,abund_tb,by="Sample") %>%
-    select(1:ncol(meta_tb),any_of(compounds)) %>%
-    select_if(has_nonzero)
-  
-  fraccon_tb<-left_join(meta_tb,fraccon_tb,by="Sample") %>%
-    select(1:ncol(meta_tb),any_of(colnames(abund_tb))) 
-  
-  #add fractional contribution equal to 100% unlabeled to compounds in abundance
-  #but not fraction labeling table
-  if (any(!colnames(abund_tb) %in% colnames(fraccon_tb))) {
-    nolabnames<-colnames(abund_tb)[which(! colnames(abund_tb) %in%
-                                           colnames(fraccon_tb))]
-    for (i in nolabnames) {
-      fraccon_tb$new<-0
-      colnames(fraccon_tb)[ncol(fraccon_tb)]<-i
-    }
-  }
-  
-  #Per compound adapt FC's below 0 (artefacts due to natural abundance 
-  #correction) to be positive to avoid problems with the visualisations
-  #later on
-  for (i in (ncol(meta_tb)+1):ncol(fraccon_tb)) {
-    if (any(fraccon_tb[,i]<0)) {
-      FCs<-pull(fraccon_tb[,i])
-      FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)])     
-      fraccon_tb[,i]<-FCs
-    }
-  }
-  
-  #prepare tables for joining and join, then order
-  fraccon_tb$datatype<-"FracCont"
-  abund_tb$datatype<-"Abund"
-  tb<-full_join(fraccon_tb,abund_tb,by=colnames(abund_tb)) %>%
-    select(colnames(meta_tb),datatype,everything())
-  
-  
-  #add normalized abundances if normalization column provided
-  #then remove normalisation factor
-  if ("Normalisation" %in% colnames(meta_tb)) {
-    normabund_tb<-tb %>% 
-      filter(datatype=="Abund") %>%
-      mutate(across((ncol(meta_tb)+2):ncol(tb),
-                    function(x) x/Normalisation))
-    normabund_tb$datatype<-"NormAbund"            
-    
-    tb<-full_join(tb,normabund_tb,by=colnames(tb)) %>%
-      select(-Normalisation)
-  }
-  
-  return(tb)
-}
+
 #Extract data for one compound in merged input, only for desired factor
 #levels and set factor order
 #need to use !! for dynamic variable names in tidyverse selection
@@ -969,21 +961,41 @@ generate_multiple_pies<-function(tb,compounds,detail_charts,pathway_charts,savep
 #   }
 # }
 # Test --------------------------------------------------------------------
-meta_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_metadata.csv",
-                        remove_empty = T,perc_to_num = F)
-iso_et_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_RA+isotopologues.csv",
-                       remove_empty = F,perc_to_num = F)
-iso_col_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_isotopologues.csv",
-                           remove_empty = T,perc_to_num = T)
-iso_tb<-extract_et_isotopologues(iso_et_tb)
+# meta_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_metadata.csv",
+#                         remove_empty = T,perc_to_num = F)
+# iso_et_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_RA+isotopologues.csv",
+#                        remove_empty = F,perc_to_num = F)
+# iso_col_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_isotopologues.csv",
+#                            remove_empty = T,perc_to_num = T)
+# iso_tb<-extract_col_isotopologues(iso_col_tb) %>%
+#     slice(-c(5,6,7,8))
+# 
+# # iso_tb<-extract_et_isotopologues(iso_et_tb) %>%
+# #   slice(-c(5,6,7,8))
+# 
+# abund_tb<-extract_et_abund(iso_et_tb,sample_colname = "Sample")
+# 
+# frac_tb<-calculate_FC(iso_tb,sample_colname = "Sample") 
+# 
+# sample_col<-"Sample"
+# 
+# compounds<-colnames(abund_tb)[-1]
+# head(meta_tb)
+# meta_formatted_tb<-format_metadata(meta_tb,sample_column = "Sample",
+#                                    factor_column = "Cohort",
+#                                    norm_column = "Normalisation")
+# test<-merge_input(meta_tb = meta_formatted_tb,
+#                   abund_tb = abund_tb,
+#                   frac_tb = frac_tb,
+#                   iso_tb=iso_tb,
+#                   sample_col = sample_col,
+#                   compounds = compounds)
 
-iso_tb<-extract_col_isotopologues(iso_col_tb)
-
-frac_tb<-calculate_FC(iso_tb)
-
-head(iso_tb)
 
 
-head(summarize_isotopologue(iso_tb))
-test<-summarize_isotopologue(iso_tb)
+
+
+
+
+
 

@@ -91,24 +91,18 @@ travis_input_ui<- function(id) {
       id=NS(id,"Input_options"),
       fluidRow(
         column(
-          5,
+          4,
           actionButton(NS(id,"create_input"),
                          label = "Create TraVis input file from curated data",
-                         style = "margin-top: 25px;margin-bottom: 25px;")
-        ),
-        column(
-          3,
-          downloadButton(NS(id, "down_3file_example"),
-                           label = "Example input",
-                           style = "margin-top: 25px;margin-bottom: 25px;"),
+                         style = "margin-top: 10px;margin-bottom: 10px;")
         ),
       ),  
       fluidRow(
         column(
-          5,
+          4,
           fileInput(NS(id,"upload_file"),
-                    "Upload previously created TraVis input file",
-                    accept = ".csv")
+                    "Upload previously created standardized TraVis input file",
+                    accept = ".csv",width = "100%")
         ),
         column(
           3,
@@ -154,14 +148,14 @@ travis_input_server <- function(id) {
       v$create_new<-T
     })
     
-    # Download example input files
-    output$down_3file_example = downloadHandler(
-      filename = '3file_example_input.zip',
-      content = function(file){
-        file.copy(here::here("Example_data/Input_3file_Example.zip"),
-                  file)
-      }
-    )
+    #Use demo data if requested
+    observeEvent(input$demo_input,{
+      v$checked_upload_tb<-format_uploaded_table(
+        read_csv(here::here(
+          paste0("Example_data/Standardized input/Input_Example_standardized ",
+          "w isotopologues.csv")))
+      )
+    })
   
     #Check if input file is valid
     output$input_valid<-renderText({
@@ -177,12 +171,7 @@ travis_input_server <- function(id) {
       return(validstring)
     })
     
-    #Use demo data if requested
-    observeEvent(input$demo_input,{
-      v$checked_upload_tb<-format_uploaded_table(
-        read_csv(here::here("Example_data/Input_Example_standardized.csv"))
-      )
-    })
+    
     
     return(v)
   })

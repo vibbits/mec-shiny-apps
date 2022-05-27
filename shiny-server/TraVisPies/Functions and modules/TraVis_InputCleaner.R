@@ -67,7 +67,49 @@ upd_selInp_guess_default<-function(inputId,choices,prefString,noPick="None",
                     selected=choice_selected) 
 }
 
+#Explanation texts-------------------------------------------------------------------
+text_exp_3file_FC<-
+  paste0("See Example 3-file input FC",
+         " above. All files contain an identically named column",
+         " with sample names.<br/>Metadata optionally contains cohorts and ",
+         "normalisation columns. The other two contain only the sample ",
+         "name column and their respective data columns named after the ",
+         "compounds which they represent.<br/>Fractional contribution ",
+         "data can be provided as a fraction between slightly less than 0 ",
+         "and 1 or a percentage between slightly less than 0% and 100%. ",
+         "12C controls should be in a separate cohort.",
+         "<br/> Normalisation happens by dividing abundances by the ",
+         "normalisation value provided.")
 
+text_exp_3file_iso<-
+  paste0("See Example 3-file input isotopologues",
+         " above. All files contain an identically named column",
+         " with sample names.<br/>Metadata optionally contains cohorts and ",
+         "normalisation columns. The other two contain only the sample ",
+         "name column and their respective data columns named after the ",
+         "compounds which they represent.<br/>Isotopologue ",
+         "data can be provided as a fraction or a percentage, with negative ",
+         "values left as is or set to 0. ",
+         "12C controls should be in a separate cohort.",
+         "<br/> Normalisation happens by dividing abundances by the ",
+         "normalisation value provided.")
+
+text_exp_2file_et<-
+  paste0("See Example 2-file Escher-Trace input above. ",
+         "Metadata contains sample names and optionally cohorts ",
+         "and normalisation columns. 12C controls should be in a separate ",
+         "cohort, if provided at all.",
+         "<br/>The isotopologue input file is the same as ",
+         "the corrected isotopologue input file for Escher trace. The ", 
+         "first row of the CSV must include the following headings in ",
+         "order: Metabolite, Fragment followed by the sample names.",
+         "<br/> Sample names in the columns of this file should correspond to ",
+         "sample names in the rows of the metadata file. ",
+         "More details on how to organise the input in the manual ",
+         "that can be downloaded by clicking the button at the top.",
+         "<br/> Normalisation happens by dividing abundances by the ",
+         "normalisation value provided.")
+  
 
 #Local output module-------------------------------------------------------------------
 tibble_localoutput_ui <- function(id) {
@@ -189,7 +231,7 @@ travis_cleaner_ui <- function(id) {
                        paste0("Upload 3 files with metadata, abundance data ",
                        "and isotopologue data"),
                        paste0("Upload 2 files with metadata and abundance/",
-                              "isotopologue data (Escher-Trace input")
+                              "isotopologue data (Escher-Trace input)")
                        ),
                      choiceValues = c("3file_FC","3file_iso","2file"),
                      width="100%"
@@ -203,9 +245,24 @@ travis_cleaner_ui <- function(id) {
                        label = "Example 3-file input isotopologues",
                        style = "margin-top: 0px;margin-bottom: 0px;"),
         downloadButton(outputId = (NS(id,"down_2example")),
-                       label = "Example 2-file input",
+                       label = "Example 2-file input Escher-Trace",
                        style = "margin-top: 0px;margin-bottom: 5px;")
       )
+    ),
+    
+    div(style="display:inline-block; ",
+        actionButton(NS(id,"input_showhide_explanation"), 
+                     label = "Show / hide explanation")),
+    
+    shinyjs::hidden(
+      htmltools::div(
+        id=NS(id,"explanation"),
+        htmlOutput(NS(id,"explanation_text"))
+      )
+    ),
+    
+    h2(paste0("Upload all input files below to continue, uploaded",
+              " data can be viewed below")
     ),
     
     tabsetPanel(
@@ -213,21 +270,6 @@ travis_cleaner_ui <- function(id) {
       type = "hidden",
       selected =  "3file_FC_input",
       tabPanel("3file_FC_input", 
-               div(style="display:inline-block; ",
-                   actionButton(NS(id,"input_showhide_3file_FC"), 
-                                label = "Show / hide explanation")),
-               
-               shinyjs::hidden(
-                 htmltools::div(
-                   id=NS(id,"explanation_3file_FC"),
-                   htmlOutput(NS(id,"text_3file_FC"))
-                   )
-                 ),
-               
-               h2(paste0("Upload all 3 input files below to continue, uploaded",
-                         "data can be viewed below")
-                  ),
-               
                #input files
                fluidRow(
                  tags$style(HTML("div.input-group {margin-bottom: -30px;}")),
@@ -240,21 +282,6 @@ travis_cleaner_ui <- function(id) {
                ),
       ),
       tabPanel("3file_iso_input", 
-               div(style="display:inline-block; ",
-                   actionButton(NS(id,"input_showhide_3file_iso"), 
-                                label = "Show / hide explanation")),
-               
-               shinyjs::hidden(
-                 htmltools::div(
-                   id=NS(id,"explanation_3file_iso"),
-                   htmlOutput(NS(id,"text_3file_iso"))
-                 )
-               ),
-               
-               h2(paste0("Upload all 3 input files below to continue, uploaded",
-                         "data can be viewed below")
-               ),
-               
                #input files
                fluidRow(
                  tags$style(HTML("div.input-group {margin-bottom: -30px;}")),
@@ -270,22 +297,6 @@ travis_cleaner_ui <- function(id) {
                  )
       ),
       tabPanel("2file_input", 
-               div(style="display:inline-block; ",
-                   actionButton(NS(id,"input_showhide_2file"), 
-                                label = "Show / hide explanation")),
-               
-               shinyjs::hidden(
-                 htmltools::div(
-                   id=NS(id,"explanation_2file"),
-                   htmlOutput(NS(id,"text_2file"))
-                 )
-               ),
-               
-               
-               h2(paste0("Upload both input files below to continue, uploaded ",
-                         "data can be viewed below")
-               ),
-               
                #input files
                fluidRow(
                  tags$style(HTML("div.input-group {margin-bottom: -30px;}")),
@@ -403,32 +414,55 @@ travis_cleaner_server <- function(id,local_version=T) {
     v<-reactiveValues(merged_tb=data.frame(NA),
                       finished=F)
     
-    # TODO update these buttons
     #Download example input files
     output$down_3example_FC = downloadHandler(
-      filename = '3file_example_FC_input.zip',
+      filename = 'Input_meta_abund_FC_Example.zip',
       content = function(file){
-        print(here::here("Example_data/Input_3file_FC_Example.zip"))
-        file.copy(here::here("Example_data/Input_FC_3file_Example.zip"),
+        file.copy(here::here("Example_data/Input_meta_abund_FC_Example.zip"),
                   file)
       }
     )
     output$down_3example_iso = downloadHandler(
-      filename = '3file_example_iso_input.zip',
+      filename = 'Input_meta_abund_iso_Example.zip',
       content = function(file){
-        print(here::here("Example_data/Input_3file_iso_Example.zip"))
-        file.copy(here::here("Example_data/Input_3file_iso_Example.zip"),
+        file.copy(here::here("Example_data/Input_meta_abund_iso_Example.zip"),
                   file)
       }
     )
     output$down_2example = downloadHandler(
-      filename = '2file_example_input.zip',
+      filename = 'Input_meta_Escher-Trace_Example.zip',
       content = function(file){
-        print(here::here("Example_data/Input_2file_Example.zip"))
-        file.copy(here::here("Example_data/Input_2file_Example.zip"),
+        file.copy(here::here("Example_data/Input_meta_Escher-Trace_Example.zip"),
                   file)
       }
     )
+    
+    #return text depending on input option selected
+    output$explanation_text <- renderText({
+      if (input$input_type=="3file_FC") {
+       return(text_exp_3file_FC)
+      }
+      
+      if (input$input_type=="3file_iso") {
+        return(text_exp_3file_iso)
+        
+      }
+      
+      if (input$input_type=="2file") {
+        return(text_exp_2file_et)
+        
+      }
+      
+    })
+    
+    ###Show/hide texts options
+    observeEvent(input$input_showhide_explanation, {
+      if(input$input_showhide_explanation %% 2 == 1){
+        shinyjs::show(id = "explanation")
+      }else{
+        shinyjs::hide(id = "explanation")
+      }
+    })
     
     #Switch to correct input file panel when type selection radiobutton is
     #pressed
@@ -444,76 +478,6 @@ travis_cleaner_server <- function(id,local_version=T) {
       if (input$input_type=="2file") {
         updateTabsetPanel(inputId = "input_panel",
                           selected = "2file_input")
-      }
-    })
-
-    #Write text to put on top as explanation, need to use server output to be  
-    #able to write multiple lines
-    output$text_3file_FC <- renderText({
-      paste0("See Example 3-file input FC",
-             " above. All contain an identically named column",
-             " with sample names. Metadata optionally contains cohorts and ",
-             "normalisation columns. The other two contain only the sample ",
-             "name column and their respective data columns named after the ",
-             "compounds which they represent.<br/>Fractional contribution ",
-             "data can be provided as a fraction between slightly less than 0 ",
-             "and 1 or a percentage between slightly less than 0% and 100%. ",
-             "12C controls should be in a separate cohort.",
-             "<br/> Normalisation happens by dividing abundances by the ",
-             "normalisation value provided.")
-    })
-    output$text_3file_iso <- renderText({
-      paste0("See Example 3-file input isotopologues",
-             " above. All contain an identically named column",
-             " with sample names. Metadata optionally contains cohorts and ",
-             "normalisation columns. The other two contain only the sample ",
-             "name column and their respective data columns named after the ",
-             "compounds which they represent.<br/>Isotopologue ",
-             "data can be provided as a fraction between slightly less than 0 ",
-             "and 1 or a percentage between slightly less than 0% and 100%. ",
-             "12C controls should be in a separate cohort.",
-             "<br/> Normalisation happens by dividing abundances by the ",
-             "normalisation value provided.")
-    })
-    output$text_2file <- renderText({
-      paste0("See Example 2-file input above this application. ",
-             "Metadata contains sample names and optionally cohorts ",
-             "and normalisation columns. 12C controls should be in a separate ",
-             "cohort, if provided at all.",
-             "<br/> The isotopologue input file is the same as ",
-             "the corrected isotopologue input file for Escher trace. The ", 
-             "first row of the CSV must include the following headings in ",
-             "order: Metabolite, Fragment followed by the sample names.",
-             "Sample names in the columns of this file should correspond to ",
-             "Sample names in the rows of the metadata file. ",
-             "More details on how to organise the input in the manual ",
-             "that can be downloaded by clicking the button at the top.",
-             "<br/> Normalisation happens by dividing abundances by the ",
-             "normalisation value provided.")
-    })
-    
-    ###Show/hide texts options
-    observeEvent(input$input_showhide_3file_FC, {
-      if(input$input_showhide_3file_FC %% 2 == 1){
-        shinyjs::show(id = "explanation_3file_FC")
-      }else{
-        shinyjs::hide(id = "explanation_3file_FC")
-      }
-    })
-    
-    observeEvent(input$input_showhide_3file_iso, {
-      if(input$input_showhide_3file_iso %% 2 == 1){
-        shinyjs::show(id = "explanation_3file_iso")
-      }else{
-        shinyjs::hide(id = "explanation_3file_iso")
-      }
-    })
-    
-    observeEvent(input$input_showhide_2file, {
-      if(input$input_showhide_2file %% 2 == 1){
-        shinyjs::show(id = "explanation_2file")
-      }else{
-        shinyjs::hide(id = "explanation_2file")
       }
     })
     
@@ -591,6 +555,7 @@ travis_cleaner_server <- function(id,local_version=T) {
         meta_tb(read_csv_clean(input$meta3_FC_file$datapath,remove_empty = T))
         abund_tb(read_csv_clean(input$abund_FC_file$datapath,remove_empty = T))
         frac_tb(read_csv_clean(input$frac_file$datapath,remove_empty = T))
+        iso_tb(tibble(NA))
       }
       
       if (input$input_type=="3file_iso") {
@@ -601,6 +566,7 @@ travis_cleaner_server <- function(id,local_version=T) {
         iso_col_tb(read_csv_clean(input$iso_col_file$datapath,remove_empty = T,
                                   perc_to_num = T))
         frac_tb(tibble(NA))
+        
         #Only if columnwise iso data loaded
         #Transform columnwise iso data to rowwise iso data for easier further 
         #calculations. Assumes iso label separator suffix is "_"
@@ -779,17 +745,11 @@ travis_cleaner_server <- function(id,local_version=T) {
     
     
     #Compound choices (all abundance columns minus sample column)
+    #todo check if correct
     choises_comp<-reactive({
-      if (input$input_type=="3file_FC") {
-        req(nrow(abund_tb())*ncol(abund_tb())>0)
-        return(colnames(abund_tb())[-which(colnames(abund_tb())==
-                                             input$sample_column)])
-      }
-      
-      if (input$input_type=="2file") {
-        req(nrow(iso_et_tb())*ncol(iso_et_tb())>1)
-        return(na.omit(iso_et_tb()$Metabolite))
-      }
+      req(nrow(abund_tb())*ncol(abund_tb())>0)
+      colnames(abund_tb())[-which(colnames(abund_tb())==
+                                    input$sample_column)]
     })
     
     #update compound
@@ -844,12 +804,7 @@ travis_cleaner_server <- function(id,local_version=T) {
         shinyjs::hide(id = "compounds")
       }
     })
-    
-    #todo: continue here: add function for including isotopologue data
-    #by including a variable that is NULL by default
-    #otherwise try to add after merged table using different function
-    
-    
+
     ###construct merged table with button press
     #button press was required to avoid recalculation when updating eg. norm
     #column before cohort_column got updated, resulting in errors and crashes.
@@ -862,25 +817,40 @@ travis_cleaner_server <- function(id,local_version=T) {
                                          factor_column = input$cohort_column,
                                          norm_column = input$norm_column)
 
-      v$merged_tb<-merge_input_3file(meta_tb = meta_formatted_tb,abund_tb = abund_tb(),
-                               fraccon_tb = frac_tb(),sample_col = input$sample_column,
-                               compounds = input$compounds)
+      if (input$input_type=="3file_FC") {
+        v$merged_tb<-merge_input(meta_tb = meta_formatted_tb,
+                                 abund_tb = abund_tb(),
+                                 frac_tb = frac_tb(),
+                                 sample_col = input$sample_column,
+                                 compounds = input$compounds)
+      } else {
+        v$merged_tb<-merge_input(meta_tb = meta_formatted_tb,
+                                 abund_tb = abund_tb(),
+                                 frac_tb = frac_tb(),
+                                 iso_tb=iso_tb(),
+                                 sample_col = input$sample_column,
+                                 compounds = input$compounds)
+      }
+      
       enable("finish")
     })
     
     #reset merged table and disable continue button when input was changed
     #(until merged table calculated again)
     observe({
+      input$input_type
       meta_tb()
       abund_tb()
       frac_tb()
+      iso_tb()
       input$sample_column
       input$cohort_column
       input$norm_column
       input$compounds
       
-      v$merged_tb<-data.frame(NA)
+      v$merged_tb<-tibble(NA)
       disable("finish")
+      updateTabsetPanel(inputId = "downoptions", selected = "None")
     })
       
     ###give signal finished when continue button pressed
@@ -890,8 +860,8 @@ travis_cleaner_server <- function(id,local_version=T) {
     
     #set right download option to show in ui
     observeEvent(v$merged_tb,{
-      updateTabsetPanel(inputId = "downoptions", selected = "none")
-      if (!is.na(v$merged_tb[1,1])) {
+      updateTabsetPanel(inputId = "downoptions", selected = "None")
+      if (nrow(v$merged_tb)*ncol(v$merged_tb)>1) {
         if (local_version) {
           updateTabsetPanel(inputId = "downoptions", selected = "local")
           tibble_localoutput_server("localout",v$merged_tb)
@@ -903,11 +873,11 @@ travis_cleaner_server <- function(id,local_version=T) {
     })
     
     ###tableviewer
-    #todo fix functionality with switching input types
     #check whether any data uploaded to show table viewer
     output$any_upload <- reactive ({
-      return(any(!is.null(input$meta_file),!is.null(input$abund_file),
-                 !is.null(input$frac_file)))
+      return(any(nrow(meta_tb())*ncol(meta_tb())>1,
+                 nrow(abund_tb())*ncol(abund_tb())>1,
+                 nrow(frac_tb())*ncol(frac_tb())>1))
     })
     outputOptions(output, 'any_upload', suspendWhenHidden=FALSE)
     
@@ -916,11 +886,15 @@ travis_cleaner_server <- function(id,local_version=T) {
     #exists used reactiveValues instead, NA before and dataframe after calc
     tablechoices<-reactive({
       choices <- NULL
-      if (!is.null(input$meta_file)) choices<-c(choices,"Metadata")
-      if (!is.null(input$abund_file)) choices<-c(choices,"Abundance data")
-      if (!is.null(input$frac_file)) choices<-c(choices,
+      if (nrow(meta_tb())*ncol(meta_tb())>1) choices<-c(choices,"Metadata")
+      if (nrow(abund_tb())*ncol(abund_tb())>1) choices<-c(choices,
+                                                          "Abundance data")
+      if (nrow(frac_tb())*ncol(frac_tb())>1) choices<-c(choices,
                                                 "Fractional contribution data")
-      if (!is.na(v$merged_tb[1,1])) choices <- c(choices,"Merged data")
+      if (nrow(iso_tb())*ncol(iso_tb())>1) choices<-c(choices,
+                                                        "Isotopologue data")
+      if (nrow(v$merged_tb)*ncol(v$merged_tb)>1) choices <- 
+          c(choices,"Merged data")
       
       return(choices)
     })
@@ -938,6 +912,7 @@ travis_cleaner_server <- function(id,local_version=T) {
       if (input$view_table == "Metadata") return(meta_tb())
       if (input$view_table == "Abundance data") return(abund_tb())
       if (input$view_table == "Fractional contribution data") return(frac_tb())
+      if (input$view_table == "Isotopologue data") return(iso_tb())
       
       #need additional option to not load when variable is NA to avoid warning 
       #when resetting v$merged_tb due to changed input (table loads faster than
