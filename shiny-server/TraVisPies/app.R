@@ -35,18 +35,12 @@ local_version<-F
 closeR_with_app<- F   
 
 
-
-###TODO delete plan
-#isotopologues
-#allow inputcleaner to function when uploading escher type isotopologue data
-#adapt input module text to show escher type data is possible,
-#remove input type examples there
-#If isotopologue data present, add option to add isotopologue significance to group label
-#If isotopologue significance requested, Calculate isotopologue significances, 
-#save most significant
-
-#abundance logscale
-#allow to display abundances on log scale
+####TODO someday when time
+#add tabs to switch between panels by turning off invisible mode, 
+#double check logic to avoid errors:
+#-switching in and out of inputcleaner should be fine
+#-output tab should only be available if an output is generated in the visual
+#module
 
 # Functions and libraries ---------------------------------------------------------------
 #libraries for shiny application

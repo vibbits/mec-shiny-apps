@@ -31,7 +31,7 @@ source(here::here("Functions and modules/TraVis_Pies_functions.R"))
 travis_outputsettings_ui <- function(id) {
   fluidPage(
     #App explanation text
-    titlePanel(h2("Travis Pies v1.0 Output")),
+    titlePanel(h2("Travis Pies Output")),
     htmlOutput(NS(id,"text")),
 
     #Saving options
@@ -208,6 +208,8 @@ travis_outputlocal_server <- function(id,v_settings,tb) {
                        pathway_charts=pathway_charts,savepath=target_savepath,
                        normalize=v_settings$norm,fact_name=v_settings$fact_name,
                        fact_order=v_settings$fact_order,
+                       P_isotopologues = v_settings$P_isotopologues,
+                       log_abund = v_settings$log_abund,
                        label_decimals=v_settings$label_decimals,
                        percent_add = v_settings$percent_add ,
                        FC_position=v_settings$FC_position,
@@ -313,10 +315,13 @@ travis_outputweb_server <- function(id,v_settings,tb) {
             incProgress(1/length(out_settings$compounds()), 
                         detail = printmessage)
             
+            print(v_settings$P_isotopologues)
             generate_pie(tb(),compound=compound,detail_charts=detail_charts,
                          pathway_charts=pathway_charts,savepath=getwd(),
                          normalize=v_settings$norm,fact_name=v_settings$fact_name,
                          fact_order=v_settings$fact_order,
+                         P_isotopologues = v_settings$P_isotopologues,
+                         log_abund = v_settings$log_abund,
                          label_decimals=v_settings$label_decimals,
                          percent_add = v_settings$percent_add ,
                          FC_position=v_settings$FC_position,
@@ -338,6 +343,16 @@ travis_outputweb_server <- function(id,v_settings,tb) {
                          mapcohortsize = v_settings$cohortsize)
           }  
         })
+        
+        #creates a caption, saves it as a txt file to output along with charts
+        caption<-create_caption(fact_order = v_settings$fact_order,
+                                log_abund = v_settings$log_abund,
+                                circlelinetypes = v_settings$circlelinetypes,
+                                FC_position = v_settings$FC_position,
+                                show_P = v_settings$show_P,
+                                P_isotopologues = v_settings$P_isotopologues)
+        writeLines(caption,paste0(getwd(),"/figure caption.txt"))
+        filelist<-c(filelist,"figure caption.txt")
         
         print("Finished")
         enable("create_download_plots")
@@ -414,7 +429,9 @@ example_settings<-list(finish=F,fact_name = "Cohort",
                        legendtitlesize =16,
                        cohortsize = 18,
                        include_legend = T,
-                       show_P=T)
+                       show_P=T,
+                       P_isotopologues=F,
+                       log_abund=T)
 
 
 travis_outputlocal_app<- function() {

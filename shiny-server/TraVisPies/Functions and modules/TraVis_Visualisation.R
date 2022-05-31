@@ -18,9 +18,6 @@
 # This object also includes an element called ready that is FALSE until 
 # valid settings were chosen
 
-#todo: test with standardized with missing lactic isotopologue string replaced
-#by "1" in all samples
-
 # Functions and libraries ---------------------------------------------------------------
 library(here)    #to make r source from file location instead of magic stuff
 library(shiny)
@@ -78,20 +75,21 @@ travis_viz_ui <- function(id) {
     #load shiny package elements
     useShinyjs(),    ## IMPORTANT: so shiny knows to use the shinyjs library
     
-    #set color for error messages
+    #set color for error messages, and adapt standard spacing
     tags$head(
       tags$style(HTML("
       .shiny-output-error-validation {
       color: red;
       }
+      div.checkbox {margin-top: 0px;margin-bottom: -20px;}
+      div.selectize-input {margin-bottom: -15px;}
       "))
     ),
-    
+
     #Always shown crucial inputs for plot
     h3(paste0("Modify compound, cohort variable,cohort order and ",
     "normalisation")),
     fluidRow(
-      tags$style(HTML("div.selectize-input {margin-bottom: -15px;}")),
       column(5,
              selectInput(NS(id,"compound"),label = "Compound",choices=NULL)
       ),
@@ -105,13 +103,23 @@ travis_viz_ui <- function(id) {
     ),
     fluidRow(
       column(12,
-             tags$head(tags$style(HTML(".btn {margin-bottom: 0px;}"))),
              disabled(
                checkboxInput(NS(id,"norm"),
                              label = paste0("Use normalized abundances, ",
                              "disabled if no normalisation column was ",
                              "provided or present"),
                              value=T,
+                             width = "100%")
+               )
+      ),
+      column(12,
+             disabled(
+               checkboxInput(NS(id,"P_isotopologues"),
+                             label = paste0("Show * in cohort name if ",
+                             "significant isotopologue difference, ",
+                             "disabled if no isotopologue data is ",
+                             "present"),
+                             value=F,
                              width = "100%")
              )
       )
@@ -155,7 +163,11 @@ travis_viz_ui <- function(id) {
                  checkboxInput(NS(id,"percent_add"),
                                label = "Add '%' to FC label"),
                  checkboxInput(NS(id,"include_legend"),label = "Add legend",
-                               value = T)
+                               value = T),
+                 checkboxInput(NS(id,"log_abund"),
+                               label = "Use base 10 logarithmic scale for abundance",
+                               value = F)
+                 
           ),
           column(3,
                  checkboxInput(NS(id,"show_P"),
@@ -261,21 +273,27 @@ travis_viz_ui <- function(id) {
     
     #output image, specify width and height to make sure other 
     #elements don't overlap
-    imageOutput(NS(id,"pie_image"),width = "100%",height="100%")
+    imageOutput(NS(id,"pie_image"),width = "100%",height="100%"),
     
-    
+    #output caption
+    div(style="display:inline-block; ",
+        actionButton(NS(id,"caption_showhide"), label = "show / hide caption")),
+    shinyjs::hidden(
+      textOutput(NS(id,"caption"))
+    )
   )
 }
 
 travis_viz_server <- function(id,tb) {
   moduleServer(id,function(input, output, session) {
     #prepare reactivevalues for passing settings out of function
-    v<-reactiveValues(ready=F,norm=NA,fact_name = NA,
-                      fact_order=NA,normalize = NA,
+    v_settings<-reactiveValues(ready=F,norm=NA,P_isotopologues = NA,
+                      fact_name = NA,fact_order=NA,normalize = NA,
                       label_decimals = NA,
                       min_lab_dist = NA,
                       percent_add = NA,
                       FC_position = NA,
+                      log_abund = NA,
                       col_labeling = NA,
                       circlelinetypes = NA,
                       circlelinecolor = NA,
@@ -296,6 +314,17 @@ travis_viz_server <- function(id,tb) {
         updateCheckboxInput(inputId = "norm",value= F )
       }
     })
+    
+    observe({
+      req(!is.na(tb()[1,1]))
+      if ("Isotopologues" %in% tb()$datatype) {
+        enable("P_isotopologues")
+      } else {
+        disable("P_isotopologues")
+        updateCheckboxInput(inputId = "P_isotopologues",value= F )
+      }
+    })
+    
     
     #enables min_lab_dist setting if FC_position set to slice
     observe({
@@ -380,6 +409,7 @@ travis_viz_server <- function(id,tb) {
       } else {
         updateCheckboxInput(inputId = "norm",value= F )
       }
+      updateCheckboxInput(inputId = "P_isotopologues",value= F )
 
       #General layout
       updateNumericInput(inputId = "maxcol_facet",value = 4)
@@ -387,6 +417,7 @@ travis_viz_server <- function(id,tb) {
       updateNumericInput(inputId = "min_lab_dist",value = 0.42)
       updateNumericInput(inputId = "label_decimals",value = 0)
       updateCheckboxInput(inputId = "percent_add",value= F)
+      updateCheckboxInput(inputId = "log_abund",value= F)
       updateCheckboxInput(inputId = "include_name",value= T)
       updateCheckboxInput(inputId = "show_P",value= T)
       updateCheckboxInput(inputId = "include_legend",value= T)
@@ -419,7 +450,7 @@ travis_viz_server <- function(id,tb) {
     
     #Get table for selected compound
     comptb<- reactive({
-      v$ready<-F
+      v_settings$ready<-F
       req(input$factor)
       req(input$fac_levels)
       req(all(input$fac_levels %in% unique(pull(tb(),input$factor))))
@@ -427,11 +458,22 @@ travis_viz_server <- function(id,tb) {
       comptb<-obtain_compounddata(tb(),compound = input$compound,
                           fact_name = input$factor,fact_order=input$fac_levels,
                           normalize = input$norm)
+      
+      #either remove isotopologues or parse them into one entry per isotopologue
+      #then make sure the value column is numeric for further analysis
+      if (!input$P_isotopologues) {
+        comptb<-filter(comptb,!datatype=="Isotopologues") %>%
+          mutate(across(!!input$compound,as.numeric))
+      } else {
+        comptb<-parse_isos_torow(comptb,valuecolumn = input$compound) %>%
+          mutate(across(!!input$compound,as.numeric))
+      }
+      return(comptb)
     })
 
     #Get table for plot
     plottb<- reactive({
-      v$ready<-F
+      v_settings$ready<-F
       #somehow comptb() is calculated before it has any data, so require
       #that the dataype column contains Abund which it always should
       req("Abund" %in% comptb()$datatype)
@@ -440,20 +482,20 @@ travis_viz_server <- function(id,tb) {
       valid_num_input(input$label_decimals,min = 0,label="FC label decimals")
       valid_num_input(input$min_lab_dist,min = 0,max=1,
                       label="Slice label distance from center")
-  
+      
       tb<-prepare_slicedata(comptb(),fact_name = input$factor,
                             compound=input$compound,
                             label_decimals = input$label_decimals,
                             min_lab_dist = input$min_lab_dist,
                             percent_add = input$percent_add,
-                            FC_position = input$FC_position)
-
-      
+                            FC_position = input$FC_position,
+                            P_isotopologues = input$P_isotopologues)
+      return(tb)
     })
     
     #make pie chart plot
     pies<-reactive({
-      v$ready<-F
+      v_settings$ready<-F
       req(plottb())
       
       #test what happens if fraction input maxcol facet
@@ -470,6 +512,7 @@ travis_viz_server <- function(id,tb) {
       
       pies<-make_piechart(plottb(),compound=input$compound,
                           fact_name = input$factor,
+                          log_abund = input$log_abund,
                           circlelinecolor = input$colour_circle,
                           circlelinetypes = circlelinetypes(),
                           maxcol_facet= input$maxcol_facet,
@@ -487,27 +530,29 @@ travis_viz_server <- function(id,tb) {
     #update input settings to those used for latest pies plot
     observeEvent(pies(),{
       #save settings and other information to output to parent molecule
-      v$ready<-T
-      v$norm<-input$norm
-      v$fact_name <- input$factor
-      v$fact_order<-input$fac_levels
-      v$normalize <- input$norm
-      v$label_decimals <- input$label_decimals
-      v$min_lab_dist <- input$min_lab_dist
-      v$percent_add <- input$percent_add
-      v$FC_position <- input$FC_position
-      v$col_labeling <- col_labeling()
-      v$circlelinetypes <- circlelinetypes()
-      v$circlelinecolor <- input$colour_circle
-      v$maxcol_facet<- input$maxcol_facet
-      v$include_name <- input$include_name
-      v$show_P<-input$show_P
-      v$alpha<-input$alpha
-      v$font<-input$font
-      v$otherfontsize <- input$fontsize_other
-      v$legendtitlesize <-input$fontsize_legend
-      v$cohortsize <- input$fontsize_cohort
-      v$include_legend <- input$include_legend
+      v_settings$ready<-T
+      v_settings$norm<-input$norm
+      v_settings$fact_name <- input$factor
+      v_settings$fact_order<-input$fac_levels
+      v_settings$normalize <- input$norm
+      v_settings$P_isotopologues <- input$P_isotopologues
+      v_settings$label_decimals <- input$label_decimals
+      v_settings$min_lab_dist <- input$min_lab_dist
+      v_settings$percent_add <- input$percent_add
+      v_settings$FC_position <- input$FC_position
+      v_settings$log_abund <- input$log_abund
+      v_settings$col_labeling <- col_labeling()
+      v_settings$circlelinetypes <- circlelinetypes()
+      v_settings$circlelinecolor <- input$colour_circle
+      v_settings$maxcol_facet<- input$maxcol_facet
+      v_settings$include_name <- input$include_name
+      v_settings$show_P<-input$show_P
+      v_settings$alpha<-input$alpha
+      v_settings$font<-input$font
+      v_settings$otherfontsize <- input$fontsize_other
+      v_settings$legendtitlesize <-input$fontsize_legend
+      v_settings$cohortsize <- input$fontsize_cohort
+      v_settings$include_legend <- input$include_legend
 
 
     })
@@ -532,51 +577,75 @@ travis_viz_server <- function(id,tb) {
            "save options to save similar images for all compounds in the input"))
     }, deleteFile = TRUE)
     
-    return(v)
+    ###Show/hide caption
+    observeEvent(input$caption_showhide, {
+      if(input$caption_showhide %% 2 == 1){
+        shinyjs::show(id = "caption")
+      }else{
+        shinyjs::hide(id = "caption")
+      }
+    })
+    
+    #render caption
+    output$caption<-renderText({
+      req(pies())
+      
+      caption<-create_caption(fact_order = v_settings$fact_order,
+                     log_abund = v_settings$log_abund,
+                     circlelinetypes = v_settings$circlelinetypes,
+                     FC_position = v_settings$FC_position,
+                     show_P = v_settings$show_P,
+                     P_isotopologues = v_settings$P_isotopologues)
+    })
+    
+    return(v_settings)
   })
 }
 
 #Wrap modules in caller function and test-------------------------------------------------------------------
 #to make correspond to input
-example_tb<-tibble(Sample = c("S1","S2","S3","S4","S1","S2","S3","S4",
-                              "S1","S2","S3","S4"),
-                   Cohort=c("coh1","coh1","coh2","coh3",
-                            "coh1","coh1","coh2","coh3",
-                            "coh1","coh1","coh2","coh3"),
-                   Mugwort2=c("Mugw1","Mugw1","Mugw2","Mugw2",
-                            "Mugw1","Mugw1","Mugw2","Mugw2",
-                            "Mugw1","Mugw1","Mugw2","Mugw2"),
-                   datatype=c("Abund","Abund","Abund","Abund",
-                              "FracCont","FracCont","FracCont","FracCont",
-                              "NormAbund","NormAbund","NormAbund","NormAbund"),
-                   Result = c(40005,45858,7000000,5000000,
-                              .5,.453,.32,1,
-                              400005,458058,700000,500000),
-                   Result2 = c(40005,4585824,7552123,50000,
-                               .8,.75,.32,0.3,
-                               400005,45805824,755123,5000))
-#example without normalized abundance
 # example_tb<-tibble(Sample = c("S1","S2","S3","S4","S1","S2","S3","S4",
 #                               "S1","S2","S3","S4"),
 #                    Cohort=c("coh1","coh1","coh2","coh3",
 #                             "coh1","coh1","coh2","coh3",
 #                             "coh1","coh1","coh2","coh3"),
 #                    Mugwort2=c("Mugw1","Mugw1","Mugw2","Mugw2",
-#                               "Mugw1","Mugw1","Mugw2","Mugw2",
-#                               "Mugw1","Mugw1","Mugw2","Mugw2"),
+#                             "Mugw1","Mugw1","Mugw2","Mugw2",
+#                             "Mugw1","Mugw1","Mugw2","Mugw2"),
 #                    datatype=c("Abund","Abund","Abund","Abund",
 #                               "FracCont","FracCont","FracCont","FracCont",
-#                               "Abund","Abund","Abund","Abund"),
+#                               "NormAbund","NormAbund","NormAbund","NormAbund"),
 #                    Result = c(40005,45858,7000000,5000000,
 #                               .5,.453,.32,1,
 #                               400005,458058,700000,500000),
 #                    Result2 = c(40005,4585824,7552123,50000,
 #                                .8,.75,.32,0.3,
 #                                400005,45805824,755123,5000))
-datatype_index<-which(colnames(example_tb)=="datatype")
+# #example without normalized abundance
+# # example_tb<-tibble(Sample = c("S1","S2","S3","S4","S1","S2","S3","S4",
+# #                               "S1","S2","S3","S4"),
+# #                    Cohort=c("coh1","coh1","coh2","coh3",
+# #                             "coh1","coh1","coh2","coh3",
+# #                             "coh1","coh1","coh2","coh3"),
+# #                    Mugwort2=c("Mugw1","Mugw1","Mugw2","Mugw2",
+# #                               "Mugw1","Mugw1","Mugw2","Mugw2",
+# #                               "Mugw1","Mugw1","Mugw2","Mugw2"),
+# #                    datatype=c("Abund","Abund","Abund","Abund",
+# #                               "FracCont","FracCont","FracCont","FracCont",
+# #                               "Abund","Abund","Abund","Abund"),
+# #                    Result = c(40005,45858,7000000,5000000,
+# #                               .5,.453,.32,1,
+# #                               400005,458058,700000,500000),
+# #                    Result2 = c(40005,4585824,7552123,50000,
+# #                                .8,.75,.32,0.3,
+# #                                400005,45805824,755123,5000))
+# datatype_index<-which(colnames(example_tb)=="datatype")
+# 
+# example_tb<-mutate(example_tb,Sample= as.character(Sample),
+#                   across(2:(datatype_index-1), as.factor))
 
-example_tb<-mutate(example_tb,Sample= as.character(Sample),
-                  across(2:(datatype_index-1), as.factor))
+example_tb<-read_csv(
+  file = "~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Standardized input/Input_Example_standardized w isotopologues.csv")
 
 travis_vizApp<- function() {
   ui <- fluidPage(
@@ -590,3 +659,10 @@ travis_vizApp<- function() {
   shinyApp(ui, server)  
 }
 travis_vizApp()
+
+# test --------------------------------------------------------------------
+# comptb<-example_tb[,c(2:4)]
+# comptb %>% filter(!datatype=="Isotopologues") %>% 
+#   mutate(Phosphoenolpyruvic_acid=as.numeric(Phosphoenolpyruvic_acid))
+# 
+

@@ -29,12 +29,6 @@
 # the final tibble.
 
 
-###TODO delete plan
-#test a corrected isotopologue dataset from escher
-#test a normal isotopologue dataset from escher
-#See comments readme for input checksnormal isotopologue
-
-
 # Functions and libraries ---------------------------------------------------------------
 #libraries for UI
 library(shiny)
@@ -500,13 +494,11 @@ travis_cleaner_server <- function(id,local_version=T) {
     
     observeEvent(input$meta3_iso_file,{
       meta_tb(read_csv_clean(input$meta3_iso_file$datapath,remove_empty = T))
-    }
-    )
+    })
 
     observeEvent(input$meta2_file,{
       meta_tb(read_csv_clean(input$meta2_file$datapath,remove_empty = T))
-      }
-    )
+    })
     
     observeEvent(input$abund_FC_file,{
       abund_tb(read_csv_clean(input$abund_FC_file$datapath,remove_empty = T))
@@ -745,7 +737,6 @@ travis_cleaner_server <- function(id,local_version=T) {
     
     
     #Compound choices (all abundance columns minus sample column)
-    #todo check if correct
     choises_comp<-reactive({
       req(nrow(abund_tb())*ncol(abund_tb())>0)
       colnames(abund_tb())[-which(colnames(abund_tb())==
