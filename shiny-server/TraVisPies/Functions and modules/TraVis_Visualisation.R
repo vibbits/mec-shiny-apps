@@ -604,23 +604,23 @@ travis_viz_server <- function(id,tb) {
 
 #Wrap modules in caller function and test-------------------------------------------------------------------
 #to make correspond to input
-# example_tb<-tibble(Sample = c("S1","S2","S3","S4","S1","S2","S3","S4",
-#                               "S1","S2","S3","S4"),
-#                    Cohort=c("coh1","coh1","coh2","coh3",
-#                             "coh1","coh1","coh2","coh3",
-#                             "coh1","coh1","coh2","coh3"),
-#                    Mugwort2=c("Mugw1","Mugw1","Mugw2","Mugw2",
-#                             "Mugw1","Mugw1","Mugw2","Mugw2",
-#                             "Mugw1","Mugw1","Mugw2","Mugw2"),
-#                    datatype=c("Abund","Abund","Abund","Abund",
-#                               "FracCont","FracCont","FracCont","FracCont",
-#                               "NormAbund","NormAbund","NormAbund","NormAbund"),
-#                    Result = c(40005,45858,7000000,5000000,
-#                               .5,.453,.32,1,
-#                               400005,458058,700000,500000),
-#                    Result2 = c(40005,4585824,7552123,50000,
-#                                .8,.75,.32,0.3,
-#                                400005,45805824,755123,5000))
+example_tb<-tibble(Sample = c("S1","S2","S3","S4","S1","S2","S3","S4",
+                              "S1","S2","S3","S4"),
+                   Cohort=c("coh1","coh1","coh2","coh3",
+                            "coh1","coh1","coh2","coh3",
+                            "coh1","coh1","coh2","coh3"),
+                   Mugwort2=c("Mugw1","Mugw1","Mugw2","Mugw2",
+                            "Mugw1","Mugw1","Mugw2","Mugw2",
+                            "Mugw1","Mugw1","Mugw2","Mugw2"),
+                   datatype=c("Abund","Abund","Abund","Abund",
+                              "FracCont","FracCont","FracCont","FracCont",
+                              "NormAbund","NormAbund","NormAbund","NormAbund"),
+                   Result = c(40005,45858,7000000,5000000,
+                              .5,.453,.32,1,
+                              400005,458058,700000,500000),
+                   Result2 = c(40005,4585824,7552123,50000,
+                               .8,.75,.32,0.3,
+                               400005,45805824,755123,5000))
 # #example without normalized abundance
 # # example_tb<-tibble(Sample = c("S1","S2","S3","S4","S1","S2","S3","S4",
 # #                               "S1","S2","S3","S4"),
@@ -644,8 +644,8 @@ travis_viz_server <- function(id,tb) {
 # example_tb<-mutate(example_tb,Sample= as.character(Sample),
 #                   across(2:(datatype_index-1), as.factor))
 
-example_tb<-read_csv(
-  file = "~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Standardized input/Input_Example_standardized w isotopologues.csv")
+# example_tb<-read_csv(
+#   file = "~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Standardized input/Input_Example_standardized w isotopologues.csv")
 
 travis_vizApp<- function() {
   ui <- fluidPage(
