@@ -53,7 +53,7 @@ check_uploaded_table<-function(tb){
   #check if datatype contains Fraccont and Abundance, and only allow but don't 
   #require NormAbund as a third possibility
   if (! all(c("Abund","FracCont") %in% tb$datatype) |
-      ! all(tb$datatype %in% c("Abund","FracCont","NormAbund")))
+      ! all(tb$datatype %in% c("Abund","FracCont","NormAbund","Isotopologues")))
     validate(errormessage)
   
   return("")
