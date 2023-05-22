@@ -393,15 +393,14 @@ summarize_isotopologue<-function(iso_tb,sample_colname="Sample"){
 
 merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
                           sample_col="Sample",compounds) {
-
+  print(meta_tb)
   #Per compound adapt FC's below 0 (artefacts due to natural abundance
   #correction) to be positive to avoid problems with the visualisations
-  #later on
+  #later on.
   for (i in (2:ncol(frac_tb))) {
     if (any(frac_tb[,i]<0)) {
       FCs<-pull(frac_tb[,i])
       FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)])     
-      frac_tb[,i]<-FCs
     }
   }
   
@@ -482,35 +481,47 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
     }
   }
   
-  #calculate normalized abundances if normalization column provided
+
+  #prepare abundance data for joining: 
+  #calculate normalized abundances if normalization column provided and add
+  #to abund tb as different datatype. 
+  #add as character as isotopologue summaries will be character too
+  abund_tb <-abund_tb %>% add_column(datatype="Abund")
+  
   if ("Normalisation" %in% colnames(meta_tb)) {
-    normabund_tb<-abund_tb %>% 
-      mutate(across((ncol(meta_tb)+1):ncol(abund_tb),
-                    function(x) x/Normalisation))
-    normabund_tb$datatype<-"NormAbund"            
-    
+    abund_tb<-abund_tb %>% 
+      mutate(across((ncol(meta_tb)+1):(ncol(abund_tb)-1),
+                    function(x) x/Normalisation)) %>%
+      mutate(datatype="NormAbund") %>%
+      full_join(abund_tb,by=colnames(abund_tb)) %>%
+      mutate(across(any_of(compounds),as.character)) 
+  } else {
+    abund_tb<-abund_tb %>%mutate(across(any_of(compounds),as.character)) 
   }
   
-  
-  #prepare tables for joining and join, then order and remove normalisation factor
-  abund_tb <-abund_tb %>% mutate(across(-c(1:3),as.character)) %>%
-    add_column(datatype="Abund")
-  
-  normabund_tb <-normabund_tb %>% mutate(across(-c(1:3),as.character)) 
-  frac_tb <-frac_tb %>% mutate(across(-c(1:3),as.character)) %>%
+  #prepare labeling  data for joining: 
+  #Add isotopologue data to fractional contribution data
+  frac_tb <-frac_tb %>% mutate(across(any_of(compounds),as.character)) %>%
     add_column(datatype="FracCont")
-  
+ 
+  print(frac_tb)
+  print(iso_tb)
   if(!length(iso_tb)==0) {
     iso_tb$datatype<-"Isotopologues"
     frac_tb<-full_join(frac_tb,iso_tb,by=colnames(frac_tb))
   }
-  
+
   tb<-full_join(frac_tb,abund_tb,by=colnames(abund_tb))
+
   
-  tb<-full_join(tb,normabund_tb,by=colnames(tb)) %>%
-    select(colnames(meta_tb),datatype,everything()) %>%
-    select(-Normalisation)
+  #join all tables then order and remove normalisation factor if present
+  tb<-full_join(frac_tb,abund_tb,by=colnames(abund_tb)) %>%
+    select(colnames(meta_tb),datatype,everything())
   
+  if ("Normalisation" %in% colnames(meta_tb)) {
+    tb<-select(tb,-Normalisation) 
+  }
+
   return(tb)
 }
   
@@ -1192,6 +1203,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 # }
 # Test --------------------------------------------------------------------
 
+
 # #test isotopologue adapated functions
 # example_tb<-read_csv(
 #   file = "~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Standardized input/Input_Example_standardized w isotopologues.csv")
@@ -1451,37 +1463,46 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 
 
 
-#test input merging
-# meta_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Original input/Input_Example_metadata.csv",
-#                         remove_empty = T,perc_to_num = F)
-# iso_et_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Original input/Input_Example_RA+isotopologues.csv",
-#                        remove_empty = F,perc_to_num = F)
-# iso_col_tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Original input/Input_Example_isotopologues.csv",
-#                            remove_empty = T,perc_to_num = T)
-# iso_tb<-extract_col_isotopologues(iso_col_tb) %>%
-#     slice(-c(5,6,7,8))
-# 
-# # iso_tb<-extract_et_isotopologues(iso_et_tb) %>%
-# #   slice(-c(5,6,7,8))
-# 
-# abund_tb<-extract_et_abund(iso_et_tb,sample_colname = "Sample")
-# 
-# frac_tb<-calculate_FC(iso_tb,sample_colname = "Sample")
-# 
-# sample_col<-"Sample"
-# 
-# compounds<-colnames(abund_tb)[-1]
-# head(meta_tb)
-# meta_formatted_tb<-format_metadata(meta_tb,sample_column = "Sample",
-#                                    factor_column = "Cohort",
-#                                    norm_column = "Normalisation")
-# test<-merge_input(meta_tb = meta_formatted_tb,
-#                   abund_tb = abund_tb,
-#                   frac_tb = frac_tb,
-#                   iso_tb=iso_tb,
-#                   sample_col = sample_col,
-#                   compounds = compounds)
+#test input merging -----------------------------------------------------------------------
+meta_tb<-read_csv_clean(paste0(getwd(),
+                               "/Example_data/Original input/Input_Example_metadata.csv"),
+                        remove_empty = T,perc_to_num = F)
+# meta_tb[,3]<-1
+abund_tb<-read_csv_clean(paste0(getwd(),
+                                "/Example_data/Original input/Input_Example_RA.csv"),
+                         remove_empty = T,perc_to_num = F)
+iso_et_tb<-read_csv_clean(paste0(getwd(),
+                                 "/Example_data/Original input/Input_Example_RA.csv"),
+                          remove_empty = F,perc_to_num = F)
+iso_col_tb<-read_csv_clean(paste0(getwd(),
+                                  "/Example_data/Original input/Input_Example_isotopologues.csv"),
+                           remove_empty = T,perc_to_num = T)
+iso_tb<-extract_col_isotopologues(iso_col_tb) %>%
+    slice(-c(5,6,7,8))
 
+# iso_tb<-extract_et_isotopologues(iso_et_tb) %>%
+#   slice(-c(5,6,7,8))
+
+# abund_tb<-extract_et_abund(iso_et_tb,sample_colname = "Sample")
+
+frac_tb<-calculate_FC(iso_tb,sample_colname = "Sample")
+
+sample_col<-"Sample"
+
+compounds<-colnames(abund_tb)[-1]
+head(meta_tb)
+(meta_formatted_tb<-format_metadata(meta_tb,sample_column = "Sample",
+                                   factor_column = "Cohort",
+                                   norm_column = "None"))
+
+test<-merge_input(meta_tb = meta_formatted_tb,
+                  abund_tb = abund_tb,
+                  frac_tb = frac_tb,
+                  iso_tb=iso_tb,
+                  sample_col = sample_col,
+                  compounds = compounds)
+
+abund_tb<-abund_tb %>%mutate(across(-c(1:3),as.character)) 
 
 
 

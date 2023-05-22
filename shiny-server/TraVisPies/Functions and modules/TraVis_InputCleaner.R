@@ -403,6 +403,8 @@ travis_cleaner_ui <- function(id) {
 
 travis_cleaner_server <- function(id,local_version=T) {
   moduleServer(id,function(input, output, session) {
+    
+    
     #reactive value prepared for storing merged_tb, initialized as NA
     #for tests until a table is generated
     v<-reactiveValues(merged_tb=data.frame(NA),
@@ -522,6 +524,7 @@ travis_cleaner_server <- function(id,local_version=T) {
       #Transform columnwise iso data to rowwise iso data for easier further 
       #calculations. Assumes iso label separator suffix is "_"
       iso_tb(extract_col_isotopologues(iso_col_tb(),iso_suffix_sep = "_"))
+      print(iso_tb)
       
       #calculate fractional contribution from isotopologue data
       frac_tb(calculate_FC(iso_tb()))
@@ -544,6 +547,9 @@ travis_cleaner_server <- function(id,local_version=T) {
     #set to currently uploaded variables in new input option when switching
     observeEvent(input$input_type,{
       if (input$input_type=="3file_FC") {
+        #only set if files are uploaded
+        req(length(input$meta3_FC_file)*
+              length(input$abund_FC_file)* length(input$frac_file)>0)
         meta_tb(read_csv_clean(input$meta3_FC_file$datapath,remove_empty = T))
         abund_tb(read_csv_clean(input$abund_FC_file$datapath,remove_empty = T))
         frac_tb(read_csv_clean(input$frac_file$datapath,remove_empty = T))
@@ -551,6 +557,9 @@ travis_cleaner_server <- function(id,local_version=T) {
       }
       
       if (input$input_type=="3file_iso") {
+        #only set if files are uploaded
+        req(length(input$meta3_iso_file)*
+              length(input$abund_iso_file)* length(input$iso_col_file)>0)
         meta_tb(read_csv_clean(input$meta3_iso_file$datapath,
                                remove_empty = T))
         abund_tb(read_csv_clean(input$abund_iso_file$datapath,
@@ -570,6 +579,8 @@ travis_cleaner_server <- function(id,local_version=T) {
       }
       
       if (input$input_type=="2file") {
+        req(length(input$meta2_file)*
+              length(input$iso_et_file)>0)
         req(nrow(meta_tb())*ncol(meta_tb())>0)
         meta_tb(read_csv_clean(input$meta2_file$datapath,remove_empty = T))
         iso_et_tb(read_csv_clean(input$iso_et_file$datapath,remove_empty = T,
@@ -607,6 +618,7 @@ travis_cleaner_server <- function(id,local_version=T) {
                    "capitalisation.")
           )
         }
+        
         #return empty text if all checks ok, conditionalpanel requires this empty
         #text!
         return("")
@@ -703,7 +715,6 @@ travis_cleaner_server <- function(id,local_version=T) {
       }
     })
     
-    
     #Normalisation choices are all metadata columns not selected for sample
     choises_norm<-reactive({
       colnames(meta_tb())[-which(colnames(meta_tb())==input$sample_column)]
@@ -721,7 +732,7 @@ travis_cleaner_server <- function(id,local_version=T) {
     #Cohort column choices are all metadata columns not selected for sample
     #or normalisation
     choises_cohort<-reactive({
-      colnames(meta_tb())[-which(colnames(meta_tb()) %in% c(input$sample_column,
+       colnames(meta_tb())[-which(colnames(meta_tb()) %in% c(input$sample_column,
                                                             input$norm_column))]
     })
     
@@ -758,6 +769,19 @@ travis_cleaner_server <- function(id,local_version=T) {
         shinyjs::hide(id = "compounds")
       }
     })
+  
+    #TODO/ the below didn't work to avoid an error coming from applying previous setting to new data before new settings are offered
+    #try something
+    #prepare reactive value that is FALSE right after input was changed
+    #and only turns to TRUE after a short delay
+    #when requiring a function to wait till this is true, this makes
+    #sure downstream input options derived from earlier input
+    #that then get applied to that input can also change before being applied
+    #again
+    # values <- reactiveValues(starting = TRUE)
+    # session$onFlushed(function() {
+    #   values$starting <- FALSE
+    # })
     
     ###add a check to crosscheck samples and compounds between files and give 
     #appropriate errors or warnings
@@ -767,6 +791,9 @@ travis_cleaner_server <- function(id,local_version=T) {
       #also requires a fractional contribution table to be calculated for this 
       #input type
       req(input$sample_column,nrow(frac_tb())*ncol(frac_tb())>1)
+
+      # req(values$starting)
+      
       #disables the merge button by default
       disable("merge")
       
@@ -783,6 +810,7 @@ travis_cleaner_server <- function(id,local_version=T) {
       
       #enables merge button if no validate errors from the function above
       enable("merge")
+      
       return(outputtext)
     })
     outputOptions(output, 'sample_valid', suspendWhenHidden=FALSE)
@@ -794,6 +822,7 @@ travis_cleaner_server <- function(id,local_version=T) {
       }else{
         shinyjs::hide(id = "compounds")
       }
+      
     })
 
     ###construct merged table with button press
@@ -815,6 +844,7 @@ travis_cleaner_server <- function(id,local_version=T) {
                                  sample_col = input$sample_column,
                                  compounds = input$compounds)
       } else {
+        print(iso_tb)
         v$merged_tb<-merge_input(meta_tb = meta_formatted_tb,
                                  abund_tb = abund_tb(),
                                  frac_tb = frac_tb(),
@@ -934,7 +964,7 @@ travis_inputcleanerApp<- function() {
   )
   
   server <- function(input, output, session) {
-    travis_cleaner_server("InputClean",local_version = F)
+    travis_cleaner_server("InputClean",local_version = local_version)
   }
   
   shinyApp(ui, server)  
