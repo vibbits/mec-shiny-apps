@@ -613,54 +613,53 @@ summarize_addP<-function(tb,cohortcolumn,valuecolumn,
   #if only 1 cohort is provided, set P to 1 for further checking
   if (!length(unique(pull(tb[,cohortcolumn])))>1) {
     tb_out$P<-99
-    return(tb_out)
-  }
-  
-  #loop over datatypes supplied
-  for (j in unique(tb$datatype)){
-    #create a separate tibble for each datatype to extract values
-    datatype_selected<-j
-    tb_type<-filter(tb,datatype==datatype_selected)
-    
-    #get cohorts names, extract first cohort as reference cohort, 
-    #and obtain values of this cohort
-    cohorts<-unique(pull(tb_type[,cohortcolumn]))
-    refcohort<-cohorts[1]
-    refvalues<-pull(tb_type[which(pull(tb_type[,cohortcolumn])==refcohort),
-                            valuecolumn])
-    
-    #loop over target (non-reference) cohorts 
-    for (i in 2:length(cohorts)) {  
-      #extract values for current cohort
-      tgtcohort<-cohorts[i]
-      tgtvalues<-pull(tb_type[which(pull(tb_type[,cohortcolumn])==tgtcohort),
+  } else {
+    #loop over datatypes supplied
+    for (j in unique(tb$datatype)){
+      #create a separate tibble for each datatype to extract values
+      datatype_selected<-j
+      tb_type<-filter(tb,datatype==datatype_selected)
+      
+      #get cohorts names, extract first cohort as reference cohort, 
+      #and obtain values of this cohort
+      cohorts<-unique(pull(tb_type[,cohortcolumn]))
+      refcohort<-cohorts[1]
+      refvalues<-pull(tb_type[which(pull(tb_type[,cohortcolumn])==refcohort),
                               valuecolumn])
       
-      
-      #make P resultstring. If only one entry in cohort, show that no P could be
-      #calculated by setting value to 99.
-      #Otherwise perform appropriate test depending on datatype.
-      #t.test for abundance data and kruskal wallis for fraccont or iso
-      #Set P=1 if all values are the same(likely 0) resulting in NaN. Make 
-      #string depending on datatype
-      if (length(tgtvalues)==1|length(refvalues)==1) {
-        tb_out$P[index+i]<-99
-      } else {
-        if (datatype_selected=="Abund"){
-          p<-t.test(refvalues,tgtvalues,)$p.value
-          if (is.nan(p)) p<-1                 
-          tb_out$P[index+i]<-p
+      #loop over target (non-reference) cohorts 
+      for (i in 2:length(cohorts)) {  
+        #extract values for current cohort
+        tgtcohort<-cohorts[i]
+        tgtvalues<-pull(tb_type[which(pull(tb_type[,cohortcolumn])==tgtcohort),
+                                valuecolumn])
+        
+        
+        #make P resultstring. If only one entry in cohort, show that no P could be
+        #calculated by setting value to 99.
+        #Otherwise perform appropriate test depending on datatype.
+        #t.test for abundance data and kruskal wallis for fraccont or iso
+        #Set P=1 if all values are the same(likely 0) resulting in NaN. Make 
+        #string depending on datatype
+        if (length(tgtvalues)==1|length(refvalues)==1) {
+          tb_out$P[index+i]<-99
         } else {
-          p<-kruskal.test(c(refvalues,tgtvalues),
-                          c(rep("Reference",length(refvalues)),
-                            rep("Target",length(tgtvalues))))$p.value             
-          if (is.nan(p)) p<-1                 
-          tb_out$P[index+i]<-p
+          if (datatype_selected=="Abund"){
+            p<-t.test(refvalues,tgtvalues,)$p.value
+            if (is.nan(p)) p<-1                 
+            tb_out$P[index+i]<-p
+          } else {
+            p<-kruskal.test(c(refvalues,tgtvalues),
+                            c(rep("Reference",length(refvalues)),
+                              rep("Target",length(tgtvalues))))$p.value             
+            if (is.nan(p)) p<-1                 
+            tb_out$P[index+i]<-p
+          }
         }
       }
+      #raise index by amount of cohorts in last set
+      index<-index+i
     }
-    #raise index by amount of cohorts in last set
-    index<-index+i
   }
   
   #set datatypes to P labels to be output
@@ -724,6 +723,7 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,
     summarize_addP(cohortcolumn = fact_name,valuecolumn = compound,
                    data_type = "checkColumn")%>%
     pivot_wider(names_from=datatype,values_from=P) 
+    
   
   #get mean abundance and fractional contribution per cohort factor level
   #then join with P data from above.
@@ -733,6 +733,9 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,
   #that is labeled, the part that is unlabeled, and finally the fractional 
   #contribution of the unlabeled part. Format as table with two entries
   #factor level, one for the labeled part and one for the unlabeled part
+  print(sum_tb<-group_by(compound_tb,!! fact_symbol,datatype)%>%
+          summarise(!!compound := mean(!!comp_symbol),.groups = "drop")%>%
+          left_join(P_tb))
   sum_tb<-group_by(compound_tb,!! fact_symbol,datatype)%>%
     summarise(!!compound := mean(!!comp_symbol),.groups = "drop")%>%
     left_join(P_tb)%>%
@@ -1202,6 +1205,100 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 #   }
 # }
 # Test --------------------------------------------------------------------
+#test crash when certain characters in names
+#load library and metadata file, get metadata samples
+#or spikes, and save additional variables as symbols for plot
+rawfolderpath<-r"(C:\GBW_MyPrograms\R_Apps_MEC\Apps\TraVis_Pies_v1.3\Rscripts\Example_data\Standardized input)" #folder with files, need this command to properly read in backslashes
+inputfile<-"Input_Example_standardized w isotopologues.csv"
+rawfolderpath<-r"(C:\GBW_MyPrograms\R_Apps_MEC\Apps\TraVis_Pies_v1.4\Rscripts\Example_data\Marco input failing)" #folder with files, need this command to properly read in backslashes
+inputfile<-"SDC_merged data.csv"
+folderpath<-gsub("\\\\", "/", rawfolderpath)         #get correct filepath from raw reference in input
+tb<-read_csv(paste0(folderpath,"/",inputfile))
+
+compound<-colnames(tb)[4]
+fact_name<-"Cohort"
+fact_order<-pull(unique(tb[,fact_name]))
+normalize<-F
+P_isotopologues<-F
+
+# first compound in inputtb
+v_settings<-list(compound=compound,
+                 fact_name=fact_name,
+                 fact_order=fact_order,
+                 norm=normalize,
+                 percent_add=F,
+                 FC_position="center",
+                 label_decimals=1,
+                 min_lab_dist=0.42,
+                 P_isotopologues=P_isotopologues,
+                 log_abund=T,
+                 circlelinecolor="gray",
+                 circlelinetypes=c(1,1,1,1),
+                 maxcol_facet=4,
+                 include_name=F,
+                 show_P=T,
+                 col_labeling=c("#bfbfbf","#ffd966"),
+                 alpha=0.7,
+                 otherfontsize=10,
+                 font="sans",
+                 legendtitlesize=10,
+                 cohortsize=12,
+                 include_legend=T)
+
+out_settings<-list(plottype = "Stand-alone",
+                   format = "png",
+                   compounds = colnames(example_tb)[-c(1:3)])
+
+format<-out_settings$format
+label_decimals<-v_settings$label_decimals
+min_lab_dist<-v_settings$min_lab_dist
+percent_add<-v_settings$percent_add
+FC_position<-v_settings$FC_position
+
+#prepare filename
+if (normalize) {
+  plotfilename<-paste0("pies normalized ",compound,".",format)
+} else {
+  plotfilename<-paste0("pies ",compound,".",format)
+}
+
+
+
+
+#get table with only measured compound data, then a table summarizing
+#derived means and p values per cohort for abundance and one for fractional
+#contribution, then put together table with inputformat for pie function
+print(paste0("extracting compounddata"))
+
+compound_tb<-obtain_compounddata(tb,compound,fact_name,
+                                 fact_order = fact_order,
+                                 normalize = normalize)
+
+#either remove isotopologues or parse them into one entry per isotopologue
+#then make sure the value column is numeric for further analysis
+if (!P_isotopologues) {
+  compound_tb<-filter(compound_tb,!datatype=="Isotopologues") %>%
+    mutate(across(!!compound,as.numeric))
+} else {
+  compound_tb<-parse_isos_torow(compound_tb,valuecolumn = compound) %>%
+    mutate(across(!!compound,as.numeric))
+}
+
+#make table with summarized data in the right format for pie creation
+#each entry containing the needed info for one slice of one of the pie 
+#charts.The average abundance normalized to the largest average abundance 
+#is the pie radius. The fractions of the above parameter multiplied with the
+#labeled and unlabeled fraction correspond to the desired slices of a pie 
+#with this radius 
+print(paste0("preparing slice data"))
+
+slice_tb<-prepare_slicedata(compound_tb,fact_name = fact_name,
+                            compound=compound,label_decimals = label_decimals,
+                            min_lab_dist = min_lab_dist,
+                            percent_add = percent_add,
+                            FC_position = FC_position,
+                            P_isotopologues=P_isotopologues)
+
 
 
 # #test isotopologue adapated functions
