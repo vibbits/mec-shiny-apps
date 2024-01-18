@@ -1208,98 +1208,98 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 #test crash when certain characters in names
 #load library and metadata file, get metadata samples
 #or spikes, and save additional variables as symbols for plot
-rawfolderpath<-r"(C:\GBW_MyPrograms\R_Apps_MEC\Apps\TraVis_Pies_v1.3\Rscripts\Example_data\Standardized input)" #folder with files, need this command to properly read in backslashes
-inputfile<-"Input_Example_standardized w isotopologues.csv"
-rawfolderpath<-r"(C:\GBW_MyPrograms\R_Apps_MEC\Apps\TraVis_Pies_v1.4\Rscripts\Example_data\Marco input failing)" #folder with files, need this command to properly read in backslashes
-inputfile<-"SDC_merged data.csv"
-folderpath<-gsub("\\\\", "/", rawfolderpath)         #get correct filepath from raw reference in input
-tb<-read_csv(paste0(folderpath,"/",inputfile))
-
-compound<-colnames(tb)[4]
-fact_name<-"Cohort"
-fact_order<-pull(unique(tb[,fact_name]))
-normalize<-F
-P_isotopologues<-F
-
-# first compound in inputtb
-v_settings<-list(compound=compound,
-                 fact_name=fact_name,
-                 fact_order=fact_order,
-                 norm=normalize,
-                 percent_add=F,
-                 FC_position="center",
-                 label_decimals=1,
-                 min_lab_dist=0.42,
-                 P_isotopologues=P_isotopologues,
-                 log_abund=T,
-                 circlelinecolor="gray",
-                 circlelinetypes=c(1,1,1,1),
-                 maxcol_facet=4,
-                 include_name=F,
-                 show_P=T,
-                 col_labeling=c("#bfbfbf","#ffd966"),
-                 alpha=0.7,
-                 otherfontsize=10,
-                 font="sans",
-                 legendtitlesize=10,
-                 cohortsize=12,
-                 include_legend=T)
-
-out_settings<-list(plottype = "Stand-alone",
-                   format = "png",
-                   compounds = colnames(example_tb)[-c(1:3)])
-
-format<-out_settings$format
-label_decimals<-v_settings$label_decimals
-min_lab_dist<-v_settings$min_lab_dist
-percent_add<-v_settings$percent_add
-FC_position<-v_settings$FC_position
-
-#prepare filename
-if (normalize) {
-  plotfilename<-paste0("pies normalized ",compound,".",format)
-} else {
-  plotfilename<-paste0("pies ",compound,".",format)
-}
-
-
-
-
-#get table with only measured compound data, then a table summarizing
-#derived means and p values per cohort for abundance and one for fractional
-#contribution, then put together table with inputformat for pie function
-print(paste0("extracting compounddata"))
-
-compound_tb<-obtain_compounddata(tb,compound,fact_name,
-                                 fact_order = fact_order,
-                                 normalize = normalize)
-
-#either remove isotopologues or parse them into one entry per isotopologue
-#then make sure the value column is numeric for further analysis
-if (!P_isotopologues) {
-  compound_tb<-filter(compound_tb,!datatype=="Isotopologues") %>%
-    mutate(across(!!compound,as.numeric))
-} else {
-  compound_tb<-parse_isos_torow(compound_tb,valuecolumn = compound) %>%
-    mutate(across(!!compound,as.numeric))
-}
-
-#make table with summarized data in the right format for pie creation
-#each entry containing the needed info for one slice of one of the pie 
-#charts.The average abundance normalized to the largest average abundance 
-#is the pie radius. The fractions of the above parameter multiplied with the
-#labeled and unlabeled fraction correspond to the desired slices of a pie 
-#with this radius 
-print(paste0("preparing slice data"))
-
-slice_tb<-prepare_slicedata(compound_tb,fact_name = fact_name,
-                            compound=compound,label_decimals = label_decimals,
-                            min_lab_dist = min_lab_dist,
-                            percent_add = percent_add,
-                            FC_position = FC_position,
-                            P_isotopologues=P_isotopologues)
-
-
+# rawfolderpath<-r"(C:\GBW_MyPrograms\R_Apps_MEC\Apps\TraVis_Pies_v1.3\Rscripts\Example_data\Standardized input)" #folder with files, need this command to properly read in backslashes
+# inputfile<-"Input_Example_standardized w isotopologues.csv"
+# rawfolderpath<-r"(C:\GBW_MyPrograms\R_Apps_MEC\Apps\TraVis_Pies_v1.4\Rscripts\Example_data\Marco input failing)" #folder with files, need this command to properly read in backslashes
+# inputfile<-"SDC_merged data.csv"
+# folderpath<-gsub("\\\\", "/", rawfolderpath)         #get correct filepath from raw reference in input
+# tb<-read_csv(paste0(folderpath,"/",inputfile))
+# 
+# compound<-colnames(tb)[4]
+# fact_name<-"Cohort"
+# fact_order<-pull(unique(tb[,fact_name]))
+# normalize<-F
+# P_isotopologues<-F
+# 
+# # first compound in inputtb
+# v_settings<-list(compound=compound,
+#                  fact_name=fact_name,
+#                  fact_order=fact_order,
+#                  norm=normalize,
+#                  percent_add=F,
+#                  FC_position="center",
+#                  label_decimals=1,
+#                  min_lab_dist=0.42,
+#                  P_isotopologues=P_isotopologues,
+#                  log_abund=T,
+#                  circlelinecolor="gray",
+#                  circlelinetypes=c(1,1,1,1),
+#                  maxcol_facet=4,
+#                  include_name=F,
+#                  show_P=T,
+#                  col_labeling=c("#bfbfbf","#ffd966"),
+#                  alpha=0.7,
+#                  otherfontsize=10,
+#                  font="sans",
+#                  legendtitlesize=10,
+#                  cohortsize=12,
+#                  include_legend=T)
+# 
+# out_settings<-list(plottype = "Stand-alone",
+#                    format = "png",
+#                    compounds = colnames(example_tb)[-c(1:3)])
+# 
+# format<-out_settings$format
+# label_decimals<-v_settings$label_decimals
+# min_lab_dist<-v_settings$min_lab_dist
+# percent_add<-v_settings$percent_add
+# FC_position<-v_settings$FC_position
+# 
+# #prepare filename
+# if (normalize) {
+#   plotfilename<-paste0("pies normalized ",compound,".",format)
+# } else {
+#   plotfilename<-paste0("pies ",compound,".",format)
+# }
+# 
+# 
+# 
+# 
+# #get table with only measured compound data, then a table summarizing
+# #derived means and p values per cohort for abundance and one for fractional
+# #contribution, then put together table with inputformat for pie function
+# print(paste0("extracting compounddata"))
+# 
+# compound_tb<-obtain_compounddata(tb,compound,fact_name,
+#                                  fact_order = fact_order,
+#                                  normalize = normalize)
+# 
+# #either remove isotopologues or parse them into one entry per isotopologue
+# #then make sure the value column is numeric for further analysis
+# if (!P_isotopologues) {
+#   compound_tb<-filter(compound_tb,!datatype=="Isotopologues") %>%
+#     mutate(across(!!compound,as.numeric))
+# } else {
+#   compound_tb<-parse_isos_torow(compound_tb,valuecolumn = compound) %>%
+#     mutate(across(!!compound,as.numeric))
+# }
+# 
+# #make table with summarized data in the right format for pie creation
+# #each entry containing the needed info for one slice of one of the pie 
+# #charts.The average abundance normalized to the largest average abundance 
+# #is the pie radius. The fractions of the above parameter multiplied with the
+# #labeled and unlabeled fraction correspond to the desired slices of a pie 
+# #with this radius 
+# print(paste0("preparing slice data"))
+# 
+# slice_tb<-prepare_slicedata(compound_tb,fact_name = fact_name,
+#                             compound=compound,label_decimals = label_decimals,
+#                             min_lab_dist = min_lab_dist,
+#                             percent_add = percent_add,
+#                             FC_position = FC_position,
+#                             P_isotopologues=P_isotopologues)
+# 
+# 
 
 # #test isotopologue adapated functions
 # example_tb<-read_csv(

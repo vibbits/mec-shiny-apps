@@ -607,25 +607,43 @@ travis_viz_server <- function(id,tb) {
 #test crash when certain characters in names
 #load standardized data format
 #or spikes, and save additional variables as symbols for plot
-rawfolderpath<-r"(C:\GBW_MyPrograms\R_Apps_MEC\Apps\TraVis_Pies_v1.4\Rscripts\Example_data\Marco input failing)" #folder with files, need this command to properly read in backslashes
-inputfile<-"SDC_merged data.csv"
-rawfolderpath<-r"(C:\GBW_MyPrograms\R_Apps_MEC\Apps\TraVis_Pies_v1.4\Rscripts\Example_data\Standardized input)" #folder with files, need this command to properly read in backslashes
-inputfile<-"Input_Example_standardized.csv"
-folderpath<-gsub("\\\\", "/", rawfolderpath)         #get correct filepath from raw reference in input
-example_tb<-read_csv(paste0(folderpath,"/",inputfile))
+# rawfolderpath<-r"(C:\GBW_MyPrograms\R_Apps_MEC\Apps\TraVis_Pies_v1.4\Rscripts\Example_data\Marco input failing)" #folder with files, need this command to properly read in backslashes
+# inputfile<-"SDC_merged data.csv"
+# rawfolderpath<-r"(C:\GBW_MyPrograms\R_Apps_MEC\Apps\TraVis_Pies_v1.4\Rscripts\Example_data\Standardized input)" #folder with files, need this command to properly read in backslashes
+# inputfile<-"Input_Example_standardized.csv"
+# folderpath<-gsub("\\\\", "/", rawfolderpath)         #get correct filepath from raw reference in input
+# example_tb<-read_csv(paste0(folderpath,"/",inputfile))
 
-travis_vizApp<- function() {
-  ui <- fluidPage(
-    travis_viz_ui("viz")
-  )
-  
-  server <- function(input, output, session) {
-    travis_viz_server("viz",reactive(example_tb))
-  }
-  
-  shinyApp(ui, server)  
-}
-travis_vizApp()
+# example_tb<-tibble(Sample = c("S1","S2","S3","S4","S1","S2","S3","S4",
+#                               "S1","S2","S3","S4"),
+#                    Cohort=c("coh1","coh1","coh2","coh3",
+#                             "coh1","coh1","coh2","coh3",
+#                             "coh1","coh1","coh2","coh3"),
+#                    Mugwort2=c("Mugw1","Mugw1","Mugw2","Mugw2",
+#                               "Mugw1","Mugw1","Mugw2","Mugw2",
+#                               "Mugw1","Mugw1","Mugw2","Mugw2"),
+#                    datatype=c("Abund","Abund","Abund","Abund",
+#                               "FracCont","FracCont","FracCont","FracCont",
+#                               "NormAbund","NormAbund","NormAbund","NormAbund"),
+#                    Result = c(40005,45858,7000000,5000000,
+#                               .5,.453,.32,1,
+#                               400005,458058,700000,500000),
+#                    Result2 = c(40005,4585824,7552123,50000,
+#                                .8,.75,.32,0.3,
+#                                400005,45805824,755123,5000))
+# 
+# travis_vizApp<- function() {
+#   ui <- fluidPage(
+#     travis_viz_ui("viz")
+#   )
+#   
+#   server <- function(input, output, session) {
+#     travis_viz_server("viz",reactive(example_tb))
+#   }
+#   
+#   shinyApp(ui, server)  
+# }
+# travis_vizApp()
 
 # test --------------------------------------------------------------------
 # comptb<-example_tb[,c(2:4)]
