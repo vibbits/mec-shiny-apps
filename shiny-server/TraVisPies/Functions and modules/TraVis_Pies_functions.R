@@ -136,7 +136,13 @@ check_iso_input<-function(tb){
 #function to prepare metadata to uniform format
 format_metadata<-function(meta_tb,sample_column,factor_column,norm_column) {
   sample_symbol<-rlang::sym(sample_column)
-  fact_symbol<-rlang::sym(factor_column)
+  if (length(factor_column)<2) {
+    fact_symbol<-rlang::sym(factor_column)
+  } else if (length(factor_column)==2){
+    fact_symbol<-rlang::syms(factor_column)
+  } else {
+    stop("At most 2 factor variables can be specified in TraVis Pies")
+  }
   
   #check normalisation, drop Normalisation column if exists but not selected
   #add dummy if no normalisation required, otherwise rename correct column
@@ -150,7 +156,7 @@ format_metadata<-function(meta_tb,sample_column,factor_column,norm_column) {
   }
   
   #check factor column, add dummy if no factors given
-  if (factor_column=="None" ) {
+  if (factor_column[1]=="None" ) {
     meta_tb$Cohort<-"SingleCohort"
     factor_column<-"Cohort"
     fact_symbol<-rlang::sym(factor_column)
@@ -161,11 +167,24 @@ format_metadata<-function(meta_tb,sample_column,factor_column,norm_column) {
   #best use := to use !! demasking environmental variable as name 
   #(as_factor might also work but I had issues and dropped it)
   #drop normalisation column if dummy
-  meta_tb<-transmute(meta_tb,
-                     !!sample_symbol := as.character(pull(meta_tb,
-                                                          sample_column)),
-                     !!fact_symbol := as.character(pull(meta_tb,factor_column)),
-                     Normalisation=as.numeric(Normalisation))
+  if (length(factor_column)==2){
+    meta_tb<-transmute(meta_tb,
+                       !!sample_symbol := as.character(pull(meta_tb,
+                                                            sample_column)),
+                       !!fact_symbol[[1]] := as.character(pull(meta_tb,
+                                                             factor_column[1])),
+                       !!fact_symbol[[2]] := as.character(pull(meta_tb,
+                                                             factor_column[2])),
+                       Normalisation=as.numeric(Normalisation))
+  } else {
+    meta_tb<-transmute(meta_tb,
+                       !!sample_symbol := as.character(pull(meta_tb,
+                                                            sample_column)),
+                       !!fact_symbol := as.character(pull(meta_tb,factor_column)),
+                       Normalisation=as.numeric(Normalisation))
+  }
+    
+ 
   if (norm_column=="None") meta_tb<-select(meta_tb,-Normalisation)
   
   return(meta_tb)
@@ -393,7 +412,6 @@ summarize_isotopologue<-function(iso_tb,sample_colname="Sample"){
 
 merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
                           sample_col="Sample",compounds) {
-  print(meta_tb)
   #Per compound adapt FC's below 0 (artefacts due to natural abundance
   #correction) to be positive to avoid problems with the visualisations
   #later on.
@@ -504,8 +522,6 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
   frac_tb <-frac_tb %>% mutate(across(any_of(compounds),as.character)) %>%
     add_column(datatype="FracCont")
  
-  print(frac_tb)
-  print(iso_tb)
   if(!length(iso_tb)==0) {
     iso_tb$datatype<-"Isotopologues"
     frac_tb<-full_join(frac_tb,iso_tb,by=colnames(frac_tb))
@@ -534,22 +550,27 @@ obtain_compounddata<-function(tb,compound,fact_name,
                               fact_order=unique(pull(tb,!!fact_name)),
                               normalize=F){
   #prepare factor name symbol to use as target column name for mutate
-  fact_symbol<-rlang::sym(fact_name)
-  
   #select only one compound, filter to include normalized or non normalized
-  #abundances, then select only given factor levels, then drops unused levels
-  compound_tb<-tb %>% select(!!fact_name,datatype,!!compound) %>%
+  fact_symbol<-rlang::syms(fact_name)
+  compound_tb<-tb %>% select(!!fact_name,datatype,!!compound)  %>%
     filter(datatype %in% c("FracCont","Isotopologues",
-                           if_else(normalize,"NormAbund","Abund"))) %>%
-    filter(!!fact_symbol %in% fact_order) %>%
-    droplevels() %>%
-    
-    #Change factor variable from text into actual factor for visualisation and
-    #significance testing. Set datatype to Abund if normalized 
-    #abundances were used, then arrange data order to match the factor levels
-    mutate(!!fact_symbol:=factor(!!fact_symbol,levels = fact_order),
-           datatype=if_else(datatype=="NormAbund","Abund",datatype)) %>%
-    arrange(!!fact_symbol)
+                           if_else(normalize,"NormAbund","Abund")))
+  
+  for(i in 1:length(fact_symbol)) {
+    #abundances, then select only given factor levels, then drops unused levels
+    compound_tb<-compound_tb %>%
+      filter(!!fact_symbol[[i]] %in% fact_order[[i]]) %>%
+      droplevels() %>%
+      
+      #Change factor variable from text into actual factor for visualisation and
+      #significance testing. Set datatype to Abund if normalized 
+      #abundances were used, then arrange data order to match the factor levels
+      mutate(!!fact_symbol[[i]]:=factor(!!fact_symbol[[i]],
+                                        levels = fact_order[[i]]),
+             datatype=if_else(datatype=="NormAbund","Abund",datatype)) %>%
+      arrange(!!fact_symbol[[i]])
+  }
+  return(compound_tb)
 }
 
 #this function parses an isotopologue pattern string entry in a standardized
@@ -583,7 +604,7 @@ summarize_addP<-function(tb,cohortcolumn,valuecolumn,
                          data_type=c("checkColumn","Abundance","FracCont",
                                      "Isotopologue")){
   #prepare cohort factor symbol to use for ordering
-  fact_symbol<-rlang::sym(cohortcolumn)
+  # fact_symbol<-rlang::syms(cohortcolumn)
   
   #if datatype is provided in column, sort tb per datatype to make sure order is
   # ok for rest of function. Otherwise, check if datatype provided as variable,
@@ -683,7 +704,7 @@ add_FClabels<-function(slice_tb,label_decimals,percent_add,fact_name,FC_position
            labFC=if_else(Abund==0,"ND",labFC),
            labFC=if_else(any(FC_position=="center"& Labeling=="Unlabeled",
                              FC_position=="slice" & FracCont==0),"",labFC))%>%
-    group_by(!!rlang::sym(fact_name)) %>%
+    group_by(!!!rlang::syms(fact_name)) %>%
     
     #get labeling positions on FC and abundance axes. Depends if in
     #center or in slice. Center if not detected (label ND)
@@ -713,7 +734,7 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,
                             P_isotopologues){
   #factor and compound need to be symbolized to use in 
   #tidyverse grouping function
-  fact_symbol<-rlang::sym(fact_name)
+  fact_symbol<-rlang::syms(fact_name)
   comp_symbol<- rlang::sym(compound) 
   
   #Calculates p values of significance tests of both relative abundance, and
@@ -733,10 +754,7 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,
   #that is labeled, the part that is unlabeled, and finally the fractional 
   #contribution of the unlabeled part. Format as table with two entries
   #factor level, one for the labeled part and one for the unlabeled part
-  print(sum_tb<-group_by(compound_tb,!! fact_symbol,datatype)%>%
-          summarise(!!compound := mean(!!comp_symbol),.groups = "drop")%>%
-          left_join(P_tb))
-  sum_tb<-group_by(compound_tb,!! fact_symbol,datatype)%>%
+  sum_tb<-group_by(compound_tb,!!!fact_symbol,datatype)%>%
     summarise(!!compound := mean(!!comp_symbol),.groups = "drop")%>%
     left_join(P_tb)%>%
     pivot_wider(names_from=datatype,values_from=!!compound)%>% 
@@ -878,10 +896,20 @@ make_piechart<-function(slice_tb,compound,
                 hjust="inward",vjust="inward")
   }
 
-  #transform bar to pie chart and plot pies on grid.
-  piebasic<-plotrect+
-    facet_wrap(vars(!!rlang::sym(fact_name)),ncol=maxcol_facet) +
-    coord_polar("y", start = 0, direction = 1)
+  #transform bar to pie chart and plot pies on grid, depending on amount of 
+  #factors.
+  if(length(fact_name)!=2) {
+    piebasic<-plotrect+
+      facet_wrap(vars(!!rlang::sym(fact_name)),ncol=maxcol_facet) +
+      coord_polar("y", start = 0, direction = 1)
+  } else {
+    gridformula<-as.formula(paste0(fact_name[2],"~",fact_name[1]))
+    #switch="both" to set labels to same side as axis titles
+    piebasic<-plotrect+
+      facet_grid(gridformula,switch="both") +   
+      coord_polar("y", start = 0, direction = 1)
+  }
+  
 
 
   #apply final formatting to pie plots. Removes x and y labels entirely,
