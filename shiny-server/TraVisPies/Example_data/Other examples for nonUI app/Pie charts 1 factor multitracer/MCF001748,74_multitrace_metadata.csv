@@ -1,25 +1,17 @@
 Sample,Condition,Normalisation,Tracer
-C9 13C glu,Control,1,13C6 Nutrient1
-C9 13C glu 12C gal,Control,1,13C6 Nutrient1
-C9 12C glu 13C gal,Control,1,13C6 Nutrient2
-C17 13C glu,Control,1,13C6 Nutrient1
-C17 13C glu 12C gal,Control,1,13C6 Nutrient1
-C17 12C glu 13C gal,Control,1,13C6 Nutrient2
-P3 13C glu,PGM1-CDG,1,13C6 Nutrient1
-P3 13C glu 12C gal,PGM1-CDG,1,13C6 Nutrient1
-P3 12C glu 13C gal,PGM1-CDG,1,13C6 Nutrient2
-P6 13C glu,PGM1-CDG,1,13C6 Nutrient1
-P6 13C glu 12C gal,PGM1-CDG,1,13C6 Nutrient1
-P6 12C glu 13C gal,PGM1-CDG,1,13C6 Nutrient2
-C6 13C glu,Control,1,13C6 Nutrient1
-C6 13C glu 12C gal,Control,1,13C6 Nutrient1
-C6 12C glu 13C gal,Control,1,13C6 Nutrient2
-C11 13C glu,Control,1,13C6 Nutrient1
-C11 13C glu 12C gal,Control,1,13C6 Nutrient1
-C11 12C glu 13C gal,Control,1,13C6 Nutrient2
-P1 13C glu,PGM1-CDG,1,13C6 Nutrient1
-P1 13C glu 12C gal,PGM1-CDG,1,13C6 Nutrient1
-P1 12C glu 13C gal,PGM1-CDG,1,13C6 Nutrient2
-P5 13C glu,PGM1-CDG,1,13C6 Nutrient1
-P5 13C glu 12C gal,PGM1-CDG,1,13C6 Nutrient1
-P5 12C glu 13C gal,PGM1-CDG,1,13C6 Nutrient2
+C9 Trac1,Control,1,13C6 Nutrient1
+C9 Trac2,Control,1,13C6 Nutrient2
+C17 Trac1,Control,1,13C6 Nutrient1
+C17 Trac2,Control,1,13C6 Nutrient2
+P3 Trac1,PGM1-CDG,1,13C6 Nutrient1
+P3 Trac2,PGM1-CDG,1,13C6 Nutrient2
+P6 Trac1,PGM1-CDG,1,13C6 Nutrient1
+P6 Trac2,PGM1-CDG,1,13C6 Nutrient2
+C6 Trac1,Control,1,13C6 Nutrient1
+C6 Trac2,Control,1,13C6 Nutrient2
+C11 Trac1,Control,1,13C6 Nutrient1
+C11 Trac2,Control,1,13C6 Nutrient2
+P1 Trac1,PGM1-CDG,1,13C6 Nutrient1
+P1 Trac2,PGM1-CDG,1,13C6 Nutrient2
+P5 Trac1,PGM1-CDG,1,13C6 Nutrient1
+P5 Trac2,PGM1-CDG,1,13C6 Nutrient2

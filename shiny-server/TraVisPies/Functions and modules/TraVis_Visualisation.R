@@ -454,9 +454,10 @@ travis_viz_server <- function(id,tb) {
       req(input$factor)
       req(input$fac_levels)
       req(all(input$fac_levels %in% unique(pull(tb(),input$factor))))
+      fact_order<-list(input$fac_levels)
       
       comptb<-obtain_compounddata(tb(),compound = input$compound,
-                          fact_name = input$factor,fact_order=input$fac_levels,
+                          fact_name = input$factor,fact_order=fact_order,
                           normalize = input$norm)
       
       #either remove isotopologues or parse them into one entry per isotopologue
