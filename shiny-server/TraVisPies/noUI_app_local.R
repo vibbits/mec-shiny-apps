@@ -98,37 +98,37 @@ tracer_column <-"None"                #"None" if not present
 #test data 1-factor different tracers
 # rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 1 factor multitracer)"
 # path<-gsub("\\\\", "/", rawpath)
-# path<-here::here("Example_data/Other examples for nonUI app/Pie charts 1 factor multitracer")
-# savepath<-path
-# metadatafile<-"MCF001748,74_multitrace_metadata.csv"
-# abundancefile<-"MCF001748,74_multitrace_RA.csv"
-# fracconfile<-"MCF001748,74_multitrace_FC.csv"
-# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-#                remove_empty = T)%>%colnames()
-# read_csv_clean(file=paste(path,fracconfile<-"MCF001748,74_multitrace_FC.csv"
-# ,sep = "/"),
-#                remove_empty = T)%>%colnames()
-# sample_column <-"Sample"
-# factor_column <- c("Condition")   #"None" if not present, or 1 or two element vector
-# norm_column <- "Normalisation"   #"None" if not present
-# tracer_column <-"Tracer"                #"None" if not present
+path<-here::here("Example_data/Other examples for nonUI app/Pie charts 1 factor multitracer")
+savepath<-path
+metadatafile<-"MCF001748,74_multitrace_metadata.csv"
+abundancefile<-"MCF001748,74_multitrace_RA.csv"
+fracconfile<-"MCF001748,74_multitrace_FC.csv"
+read_csv_clean(file=paste(path,metadatafile,sep = "/"),
+               remove_empty = T)%>%colnames()
+read_csv_clean(file=paste(path,fracconfile<-"MCF001748,74_multitrace_FC.csv"
+,sep = "/"),
+               remove_empty = T)%>%colnames()
+sample_column <-"Sample"
+factor_column <- c("Condition")   #"None" if not present, or 1 or two element vector
+norm_column <- "Normalisation"   #"None" if not present
+tracer_column <-"Tracer"                #"None" if not present
 
 #test data 2-factor different tracers
 # rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
 # path<-gsub("\\\\", "/", rawpath)
-path<-here::here("Example_data/Other examples for nonUI app/Pie charts 2factor multitracer")
-savepath<-path
-metadatafile<-"2factor_multitrace_metadata.csv"
-abundancefile<-"2factor_multitrace_RA.csv"
-fracconfile<-"2factor_multitrace_FC.csv"
-read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-               remove_empty = T)%>%colnames()
-read_csv_clean(file=paste(path,fracconfile,sep = "/"),
-               remove_empty = T)%>%colnames()
-sample_column <-"Sample"
-factor_column <- c("Condition","Supplementation")   #"None" if not present, or 1 or two element vector
-norm_column <- "Normalisation"   #"None" if not present
-tracer_column <-"Tracer"                #"None" if not present
+# path<-here::here("Example_data/Other examples for nonUI app/Pie charts 2factor multitracer")
+# savepath<-path
+# metadatafile<-"2factor_multitrace_metadata.csv"
+# abundancefile<-"2factor_multitrace_RA.csv"
+# fracconfile<-"2factor_multitrace_FC.csv"
+# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
+#                remove_empty = T)%>%colnames()
+# read_csv_clean(file=paste(path,fracconfile,sep = "/"),
+#                remove_empty = T)%>%colnames()
+# sample_column <-"Sample"
+# factor_column <- c("Condition","Supplementation")   #"None" if not present, or 1 or two element vector
+# norm_column <- "Normalisation"   #"None" if not present
+# tracer_column <-"Tracer"                #"None" if not present
 
 #Miscellaneous
 P_isotopologues<-F                     #leave at false, only input fraction contribution data 
@@ -308,7 +308,8 @@ tb<-merge_input(meta_tb = meta_formatted_tb,abund_tb = abund_tb,frac_tb = frac_t
 compounds_updated<-colnames(tb)[which(!colnames(tb)%in%
                                         c(colnames(meta_formatted_tb),
                                           "datatype"))]
-# compounds_updated<-"Fructose 1,6-bisphosphate"  #TODO:remove
+compounds_updated<-"Galactose-6-phosphate"  #TODO:remove
+
 
 fact_order<-list(NULL)
 for (i in 1:length(factor_column)) {
@@ -346,8 +347,7 @@ generate_multiple_pies(tb,compounds=compounds_updated,
                        mapotherfontsize=mapotherfontsize,
                        mapcohortsize=mapcohortsize)
 
-#multitracer labeling twofactor add isotopologuye support generate slice
-#make levels revert properly at beginning pie function
+#Todo nonshiny code check FC p value gal6phos = 0.22 without fraction??
 
 debug(corFC_addUnlab)
 undebug(corFC_addUnlab)

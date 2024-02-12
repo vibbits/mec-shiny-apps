@@ -823,12 +823,15 @@ add_FClabels<-function(slice_tb,label_decimals,percent_add,fact_name,
     #Get label, set to ND if not detected in any sample in group. Set label
     #of unlabeled fraction to empty if labeling is requested in center
     mutate(FracCont=round(FracCont,label_decimals+2),
-           labFC=if_else(percent_add,paste0(FracCont*100,"%"),
+           labFC=if_else(FC_position=="slice" & FracCont==0,
+                         paste0("<",1^label_decimals/2),
                          as.character(FracCont*100)),
+           labFC=if_else(percent_add,paste0(labFC,"%"),
+                         labFC),
            labFC=if_else(Abund==0,"ND",labFC),
-           labFC=if_else(any(FC_position=="center"&
-                               !!tracer_symbol=="Unlabeled",
-                             FC_position=="slice" & FracCont==0),"",labFC))%>%
+           labFC=if_else(FC_position=="center"&
+                               !!tracer_symbol=="Unlabeled","",labFC),
+           )%>%
     group_by(!!!rlang::syms(fact_name)) %>%
     
     #get labeling positions on FC and abundance axes. Depends if in
@@ -991,7 +994,8 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
       is.na(P.FC) ~ "",
       P.FC==99 ~ "N=1,P=NA",
       length(unique(!!tracer_symbol))>2 & P.FC<0.05 ~ "*",
-      length(unique(!!tracer_symbol))>2 & P.FC<0.1 ~ "`",
+      # length(unique(!!tracer_symbol))>2 & P.FC>=0.05 &
+      #   Fraction<1^label_decimals/2~ "",
       length(unique(!!tracer_symbol))>2 & P.FC>=0.05 ~ "",
       length(unique(!!tracer_symbol))<=2 & P.FC<0.05 ~paste0("pFC=",
                                                              round(P.FC,2),
@@ -1002,8 +1006,35 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
         is.na(P.RA) ~ "",
         P.RA==99 ~ "N=1,P=NA",
         P.RA<0.05 ~ paste0("pRA=",round(P.RA,2),"*"),
-        P.RA>=0.05 ~ paste0("pRA=",round(P.RA,2))))%>%
+        P.RA>=0.05 ~ paste0("pRA=",round(P.RA,2))),
+      labFC=if_else(P.FC>=0.5))%>%
     ungroup()
+  
+  #If required, add * to cohort name if any isotopologue P < 0.05
+  #don't add anything if all are NA (reference cohort)
+  #todo shiny: add support isotopologues twofactor
+  if (P_isotopologues) {
+    #make variable to store factor levels that have significant isotopologue
+    #difference
+    levels_orig<-levels(pull(slice_tb[,fact_name]))
+    iso_cols<-colnames(slice_tb)[which(substr(colnames(slice_tb),1,2)=="pM")]
+    for (i in levels_orig) {
+      #get P's of isotopologues from first entry, 
+      #check if any significant, add 1 to vector to avoid warnings
+      iso_Ps<-unlist(slice_tb[
+        which(slice_tb[,fact_name]==i & slice_tb[,tracer_column]=="Unlabeled"),
+        iso_cols],use.names = F)
+      
+      #add * to level name if significant
+      if (min(c(iso_Ps,1),na.rm = T)<0.05) {
+        newname<-paste0(i,"*")
+        slice_tb<-slice_tb %>%
+          mutate(!!fact_name:=recode(!!fact_symbol,!!i := newname))
+      }
+    }
+  }
+  
+  return(slice_tb)
 }
 
 
