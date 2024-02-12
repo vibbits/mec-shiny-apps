@@ -65,11 +65,11 @@ source(here::here("Functions and modules/TraVis_Pies_functions.R"))
 #test data 1-factor
 # rawpath<-r"(C:\Users\u0134881\Documents\R\Create figures\Pie charts\Pie charts inputfiles\Pie charts 1factor)"
 # path<-gsub("\\\\", "/", rawpath)
-path<-here::here("Example_data/Other examples for nonUI app/Pie charts 1factor")
+path<-here::here("Example_data/Original input")
 savepath<-path
-metadatafile<-"MCF000863_QEX_metadata AMA.csv"
-abundancefile<-"MCF000863_QEX_RA.csv"
-fracconfile<-"MCF000863_QEX_FC.csv"
+metadatafile<-"Input_Example_metadata.csv"
+abundancefile<-"Input_Example_RA.csv"
+fracconfile<-"Input_Example_FC.csv"
 mapcoordsfile<-"Pathway figure coords.csv"
 read_csv_clean(file=paste(path,metadatafile,sep = "/"),
                remove_empty = T)%>%colnames()
@@ -82,36 +82,36 @@ tracer_column <-"None"                #"None" if not present
 #test data 2-factor
 # rawpath<-r"(C:\Users\u0134881\Documents\R\Create figures\Pie charts\Pie charts inputfiles\Pie charts 2factor)"
 # path<-gsub("\\\\", "/", rawpath)
-path<-here::here("Example_data/Other examples for nonUI app/Pie charts 2factor")
-savepath<-path
-metadatafile<-"2factorpies_metadata.csv"
-abundancefile<-"2factorpies_RA.csv"
-fracconfile<-"2factorpies_FC.csv"
-read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-               remove_empty = T)%>%colnames()
-sample_column <-"Sample"
-factor_column <- c("Time","Condition")   #"None" if not present, or 1 or two element vector
-norm_column <- "Normalisation"   #"None" if not present
-tracer_column <-"None"                #"None" if not present
+# path<-here::here("Example_data/Other examples for nonUI app/Pie charts 2factor")
+# savepath<-path
+# metadatafile<-"2factorpies_metadata.csv"
+# abundancefile<-"2factorpies_RA.csv"
+# fracconfile<-"2factorpies_FC.csv"
+# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
+#                remove_empty = T)%>%colnames()
+# sample_column <-"Sample"
+# factor_column <- c("Time","Condition")   #"None" if not present, or 1 or two element vector
+# norm_column <- "Normalisation"   #"None" if not present
+# tracer_column <-"None"                #"None" if not present
 
 
 #test data 1-factor different tracers
 # rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 1 factor multitracer)"
 # path<-gsub("\\\\", "/", rawpath)
-path<-here::here("Example_data/Other examples for nonUI app/Pie charts 1 factor multitracer")
-savepath<-path
-metadatafile<-"MCF001748,74_multitrace_metadata.csv"
-abundancefile<-"MCF001748,74_multitrace_RA.csv"
-fracconfile<-"MCF001748,74_multitrace_FC.csv"
-read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-               remove_empty = T)%>%colnames()
-read_csv_clean(file=paste(path,fracconfile<-"MCF001748,74_multitrace_FC.csv"
-,sep = "/"),
-               remove_empty = T)%>%colnames()
-sample_column <-"Sample"
-factor_column <- c("Condition")   #"None" if not present, or 1 or two element vector
-norm_column <- "Normalisation"   #"None" if not present
-tracer_column <-"Tracer"                #"None" if not present
+# path<-here::here("Example_data/Other examples for nonUI app/Pie charts 1 factor multitracer")
+# savepath<-path
+# metadatafile<-"MCF001748,74_multitrace_metadata.csv"
+# abundancefile<-"MCF001748,74_multitrace_RA.csv"
+# fracconfile<-"MCF001748,74_multitrace_FC.csv"
+# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
+#                remove_empty = T)%>%colnames()
+# read_csv_clean(file=paste(path,fracconfile<-"MCF001748,74_multitrace_FC.csv"
+# ,sep = "/"),
+#                remove_empty = T)%>%colnames()
+# sample_column <-"Sample"
+# factor_column <- c("Condition")   #"None" if not present, or 1 or two element vector
+# norm_column <- "Normalisation"   #"None" if not present
+# tracer_column <-"Tracer"                #"None" if not present
 
 #test data 2-factor different tracers
 # rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
@@ -159,7 +159,7 @@ factY.levels<-NULL                    #character vector with order of factor lev
 #any color input recognized by ggplot2::scale_fill_manual can be used
 colLabeling<-c("#bfbfbf","#ffd966")   #colors for labeled and unlabeled fraction 
 # colLabeling<-c("#bfbfbf","#ffd966","lightblue")   #colors for 2 tracers and unlabeled fraction
-maxcol_facet<-2                       #maximum amount of images horizontal
+maxcol_facet<-3                       #maximum amount of images horizontal
 include_name<-T                        #include compound name on figure
 include_legend<-T                      #include legend on figure
 
@@ -210,7 +210,7 @@ mapotherfontsize<-18
 #label is plotted at minLabDist  distance from the circle center
 FCposition<-"center"  
 minLabDist<-0.7                       
-labelDecimals<-0                      #amount of decimals in FC label
+labelDecimals<-1                     #amount of decimals in FC label
 percentAdd<-T                         #if true adds "%" to the FC label
 
 #linetypes and colour of concentric circles
@@ -248,7 +248,7 @@ meta_formatted_tb<-read_csv_clean(file=paste(path,metadatafile,sep = "/"),
   format_metadata(sample_column = sample_column,
                   factor_column = factor_column,
                   norm_column = norm_column,
-                  tracer_column=tracer_column,dummytracer=tracer_column)
+                  tracer_column=tracer_column)
 
 abund_tb<-read_csv_clean(paste(path,abundancefile,sep = "/"),remove_empty = T)
 frac_tb<-read_csv_clean(paste(path,fracconfile,sep = "/"),remove_empty = T)
@@ -308,9 +308,10 @@ tb<-merge_input(meta_tb = meta_formatted_tb,abund_tb = abund_tb,frac_tb = frac_t
 compounds_updated<-colnames(tb)[which(!colnames(tb)%in%
                                         c(colnames(meta_formatted_tb),
                                           "datatype"))]
-compounds_updated<-"Galactose-6-phosphate"  #TODO:remove
 
+compounds_updated<-"Citric_acid"  #for checking specific compound only
 
+#make list of factor orders per factor to allow multiple factors
 fact_order<-list(NULL)
 for (i in 1:length(factor_column)) {
   fact_order[[i]]<-unique(pull(tb,!!factor_column[i]))

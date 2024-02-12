@@ -288,7 +288,17 @@ travis_viz_server <- function(id,tb) {
   moduleServer(id,function(input, output, session) {
     #prepare reactivevalues for passing settings out of function
     v_settings<-reactiveValues(ready=F,norm=NA,P_isotopologues = NA,
-                      fact_name = NA,fact_order=NA,normalize = NA,
+                      fact_name = NA,
+                      
+                      #todo twofactor: allow list of multiple elements somehow
+                      fact_order=list(NULL),
+                      normalize = NA,
+                      
+                      #currently set default tracer column to labeling as not
+                      #in old input files, can update from default
+                      #if label column is present in input later
+                      tracer_column = "Labeling",
+                      
                       label_decimals = NA,
                       min_lab_dist = NA,
                       percent_add = NA,
@@ -454,11 +464,26 @@ travis_viz_server <- function(id,tb) {
       req(input$factor)
       req(input$fac_levels)
       req(all(input$fac_levels %in% unique(pull(tb(),input$factor))))
+      
+      #todo twofactor make list here of fac_levels of all input facs, not just one
       fact_order<-list(input$fac_levels)
       
-      comptb<-obtain_compounddata(tb(),compound = input$compound,
-                          fact_name = input$factor,fact_order=fact_order,
-                          normalize = input$norm)
+      #Add dummy tracer column called labeling, can change to support multi
+      #label input later
+      if(!v_settings$tracer_column %in% colnames(tb())) {
+        tracer_symbol<-rlang::sym(v_settings$tracer_column)
+        comptb<-obtain_compounddata(tb() %>%
+                                      mutate(!!tracer_symbol:="Labeled"),
+                                    compound = input$compound,
+                                    fact_name = input$factor,fact_order=fact_order,
+                                    normalize = input$norm,
+                                    tracer_column = v_settings$tracer_column)
+      } else {
+        comptb<-obtain_compounddata(tb(),compound = input$compound,
+                                    fact_name = input$factor,fact_order=fact_order,
+                                    normalize = input$norm,
+                                    tracer_column = v_settings$tracer_column)
+      }
       
       #either remove isotopologues or parse them into one entry per isotopologue
       #then make sure the value column is numeric for further analysis
@@ -486,6 +511,7 @@ travis_viz_server <- function(id,tb) {
       
       tb<-prepare_slicedata(comptb(),fact_name = input$factor,
                             compound=input$compound,
+                            tracer_column = v_settings$tracer_column,
                             label_decimals = input$label_decimals,
                             min_lab_dist = input$min_lab_dist,
                             percent_add = input$percent_add,
@@ -513,6 +539,7 @@ travis_viz_server <- function(id,tb) {
       
       pies<-make_piechart(plottb(),compound=input$compound,
                           fact_name = input$factor,
+                          tracer_column = v_settings$tracer_column,
                           log_abund = input$log_abund,
                           circlelinecolor = input$colour_circle,
                           circlelinetypes = circlelinetypes(),
@@ -534,7 +561,8 @@ travis_viz_server <- function(id,tb) {
       v_settings$ready<-T
       v_settings$norm<-input$norm
       v_settings$fact_name <- input$factor
-      v_settings$fact_order<-input$fac_levels
+      #todo twofactor: allow list of multiple elements somehow
+      v_settings$fact_order<-list(input$fac_levels)
       v_settings$normalize <- input$norm
       v_settings$P_isotopologues <- input$P_isotopologues
       v_settings$label_decimals <- input$label_decimals

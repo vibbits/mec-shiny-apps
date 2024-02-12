@@ -835,7 +835,8 @@ travis_cleaner_server <- function(id,local_version=T) {
       meta_formatted_tb<-format_metadata(meta_tb = meta_tb(),
                                          sample_column = input$sample_column,
                                          factor_column = input$cohort_column,
-                                         norm_column = input$norm_column)
+                                         norm_column = input$norm_column,
+                                         )
 
       if (input$input_type=="3file_FC") {
         v$merged_tb<-merge_input(meta_tb = meta_formatted_tb,
