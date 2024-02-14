@@ -1293,13 +1293,13 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
                        font,legendtitlesize,cohortsize,include_legend,
                        mapotherfontsize=16,mapcohortsize=18,format="png",
                        show_P=T) {
-
+  
   #Add dummy tracer column called labeling,
   #if tracer column is missing from dataframe
   if(!tracer_column %in% colnames(tb)) {
     tracer_symbol<-rlang::sym(tracer_column)
     tb<-tb %>%mutate(!!tracer_symbol:="Labeled")
-  } 
+  }
   # print(tb)
   
   print(paste0("Processing ",compound))

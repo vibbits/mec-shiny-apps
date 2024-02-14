@@ -62,6 +62,8 @@ valid_num_input<-function(input,min=NULL,max=NULL,label=input){
   }
 }
 
+#Vector of reserved colnames that cannot be selected as cohort etc
+reservednames<-c("Labeling")
 #Visualisation module UI and server-------------------------------------------------------------------
 travis_viz_ui <- function(id) {
   #predefine named linetype list for selecting
@@ -362,7 +364,8 @@ travis_viz_server <- function(id,tb) {
     #factor choices
     choises_factor<-reactive({
       req(!is.na(tb()[1,1]))
-      colnames(tb())[2:(which(colnames(tb())=="datatype")-1)]
+      facnames<-colnames(tb())[2:(which(colnames(tb())=="datatype")-1)]
+      facnames[which(! facnames %in% reservednames)]
     })
     observeEvent(choises_factor(), {
       updateSelectInput(inputId = "factor", choices = choises_factor(),
