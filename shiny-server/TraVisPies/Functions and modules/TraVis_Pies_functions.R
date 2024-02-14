@@ -82,12 +82,17 @@ has_data <- function(x) { sum(!is.na(x)) > 0 }
 has_nonzero <- function(x) { any(x != 0)}         
 
 # function for loading and cleaning abundance and FC files
-read_csv_clean<- function(file,remove_empty=FALSE,perc_to_num=T){
+read_csv_clean<- function(file,remove_empty=FALSE,perc_to_num=T,
+                          remove_rowempty=FALSE){
   input_tb<-vroom::vroom(file = file, delim = ",",show_col_types = FALSE)
     
-  #drop empty columns if desired
+  #drop empty columns and rows if desired
   if (remove_empty) {
     input_tb<-select_if(input_tb,has_data)          
+  }
+  
+  if (remove_rowempty) {
+    input_tb<-input_tb %>% na.omit()          
   }
   
   #set percentage strings to fractions if desired
