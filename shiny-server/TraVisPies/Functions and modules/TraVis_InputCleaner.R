@@ -540,7 +540,7 @@ travis_cleaner_server <- function(id,local_version=T) {
       #Transform columnwise iso data to rowwise iso data for easier further 
       #calculations. Assumes iso label separator suffix is "_"
       iso_tb(extract_col_isotopologues(iso_col_tb(),iso_suffix_sep = "_"))
-      print(iso_tb)
+      # print(iso_tb)
       
       #calculate fractional contribution from isotopologue data
       frac_tb(calculate_FC(iso_tb()))
@@ -870,7 +870,7 @@ travis_cleaner_server <- function(id,local_version=T) {
                                  sample_col = input$sample_column,
                                  compounds = input$compounds)
       } else {
-        print(iso_tb)
+        # print(iso_tb)
         v$merged_tb<-merge_input(meta_tb = meta_formatted_tb,
                                  abund_tb = abund_tb(),
                                  frac_tb = frac_tb(),

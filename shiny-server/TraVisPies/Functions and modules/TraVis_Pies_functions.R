@@ -140,7 +140,7 @@ check_iso_input<-function(tb){
 
 
 #function to prepare metadata to uniform format
-format_metadata<-function(meta_tb,sample_column,factor_column,norm_column,
+format_metadata<-function(meta_tb,sample_column,factor_column,norm_column=NULL,
                           tracer_column="Labeling") {
   sample_symbol<-rlang::sym(sample_column)
   tracer_symbol<-rlang::sym(tracer_column)
@@ -155,6 +155,8 @@ format_metadata<-function(meta_tb,sample_column,factor_column,norm_column,
   
   #check normalisation, drop Normalisation column if exists but not selected
   #add dummy if no normalisation required, otherwise rename correct column
+  if(length(norm_column)==0) norm_column<-"None"
+  
   if ("Normalisation" %in% colnames(meta_tb) & norm_column != "Normalisation") {
     meta_tb<-select(meta_tb,-Normalisation)
   }
@@ -455,6 +457,7 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
         isos<-iso_tb[i,-c(1,2)]
         negisos<-which(isos<0)
         
+        # print(metabolite)
         #if no values negative, skip this section to avoid empty reference  
         #warnings and useless computing. If negatives, no zero correction was done
         #before and should be done now
@@ -473,7 +476,8 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
           iso_tb[parent_index,-c(1,2)]<-iso_tb[parent_index,-c(1,2)]+toadd
           
           #if any parents became <0, set to 0 (likely parent was undetectable)
-          iso_tb[parent_index,][which(iso_tb[parent_index,]<0)]<-0
+          iso_tb[parent_index,][which(iso_tb[parent_index,]<0&
+                                        is.numeric(iso_tb[parent_index,]))]<-0
         }
         
       }
@@ -1597,6 +1601,58 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 #   }
 # }
 # Test --------------------------------------------------------------------
+#test crash merger
+rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Crashes)"
+path<-gsub("\\\\", "/", rawpath)
+savepath<-path
+metadatafile<-"Input_MCF1711_metadata.csv"
+abundancefile<-"Input_MCF1711_RA.csv"
+tracerfile<-"Input_MCF1711_isotopologues.csv"
+norm_column<-NULL
+(meta_tb<-read_csv_clean(paste0(path,"/",metadatafile),remove_empty = T,
+                remove_rowempty = T))
+sample_column<-colnames(meta_tb)[1]
+cohort_column<-colnames(meta_tb)[2]
+
+meta_formatted_tb<-format_metadata(meta_tb = meta_tb,
+                                   sample_column = sample_column,
+                                   factor_column = cohort_column,
+                                   norm_column = norm_column)
+
+abund_tb<-read_csv_clean(paste0(path,"/",abundancefile),remove_empty = T,
+                        remove_rowempty = T)
+compounds<-colnames(abund_tb[-which(colnames(abund_tb)==sample_column)])
+
+if(grepl("iso",tracerfile)) {
+  iso_tb<-extract_col_isotopologues(
+    read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
+                   remove_rowempty = T),
+    iso_suffix_sep = "_")
+  frac_tb<-calculate_FC(iso_tb)
+  merged<-merge_input(meta_tb = meta_formatted_tb,
+                      abund_tb = abund_tb,
+                      frac_tb = frac_tb,
+                      sample_col = sample_column,
+                      iso_tb = iso_tb,
+                      compounds = compounds)
+  debug(merge_input)
+  undebug(merge_input)
+} else {
+  frac_tb<-read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
+                          remove_rowempty = T)
+  merged<-merge_input(meta_tb = meta_formatted_tb,
+              abund_tb = abund_tb,
+              frac_tb = frac_tb,
+              sample_col = sample_column,
+              compounds = compounds)
+}
+
+
+
+
+
+
+
 #test crash when certain characters in names
 #load library and metadata file, get metadata samples
 #or spikes, and save additional variables as symbols for plot
