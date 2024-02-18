@@ -65,18 +65,42 @@ source(here::here("Functions and modules/TraVis_Pies_functions.R"))
 #test data 1-factor
 # rawpath<-r"(C:\Users\u0134881\Documents\R\Create figures\Pie charts\Pie charts inputfiles\Pie charts 1factor)"
 # path<-gsub("\\\\", "/", rawpath)
-path<-here::here("Example_data/Original input")
+# savepath<-path
+# metadatafile<-"Input_Example_metadata.csv"
+# abundancefile<-"Input_Example_RA.csv"
+# fracconfile<-"Input_Example_FC.csv"
+# mapcoordsfile<-"Pathway figure coords.csv"
+# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
+#                remove_empty = T)%>%colnames()
+# sample_column <-"Sample"
+# factor_column <- "Cohort"   #"None" if not present, or 1 or two element vector
+# norm_column <- "None"   #"None" if not present
+# tracer_column <-"None"                #"None" if not present
+
+#test data 1-factor iso input
+# rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Crashes)"
+# path<-gsub("\\\\", "/", rawpath)
+path<-here::here("Example_data/Crashes")
 savepath<-path
-metadatafile<-"Input_Example_metadata.csv"
-abundancefile<-"Input_Example_RA.csv"
-fracconfile<-"Input_Example_FC.csv"
-mapcoordsfile<-"Pathway figure coords.csv"
-read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-               remove_empty = T)%>%colnames()
-sample_column <-"Sample"
-factor_column <- "Cohort"   #"None" if not present, or 1 or two element vector
-norm_column <- "None"   #"None" if not present
+metadatafile<-"Input_MCF1711_metadata.csv"
+abundancefile<-"Input_MCF1711_RA.csv"
+tracerfile<-"Input_MCF1711_isotopologues.csv"
+norm_column<-"None"
+(meta_tb<-read_csv_clean(paste0(path,"/",metadatafile),remove_empty = T,
+                         remove_rowempty = T))
+sample_column<-colnames(meta_tb)[1]
+factor_column<-colnames(meta_tb)[2]
 tracer_column <-"None"                #"None" if not present
+
+
+# meta_formatted_tb<-format_metadata(meta_tb = meta_tb,
+#                                    sample_column = sample_column,
+#                                    factor_column = cohort_column,
+#                                    norm_column = norm_column)
+# 
+# abund_tb<-read_csv_clean(paste0(path,"/",abundancefile),remove_empty = T,
+#                          remove_rowempty = T)
+# compounds<-colnames(abund_tb[-which(colnames(abund_tb)==sample_column)])
 
 
 #test data 2-factor
@@ -242,7 +266,7 @@ if(tracer_column=="None") {
   tracer_column<-"Labeling"
 }
 
-#input files and check input
+#input metadata and abundance data, put in right format for following functions
 meta_formatted_tb<-read_csv_clean(file=paste(path,metadatafile,sep = "/"),
                                   remove_empty = T) %>%
   format_metadata(sample_column = sample_column,
@@ -251,18 +275,36 @@ meta_formatted_tb<-read_csv_clean(file=paste(path,metadatafile,sep = "/"),
                   tracer_column=tracer_column)
 
 abund_tb<-read_csv_clean(paste(path,abundancefile,sep = "/"),remove_empty = T)
-frac_tb<-read_csv_clean(paste(path,fracconfile,sep = "/"),remove_empty = T)
+
+#read isotopologue or fractional contribution data. Set empty isotopologue tibble
+#if no isotopologue data supplied
+if(grepl("iso",tracerfile)) {
+  iso_tb<-extract_col_isotopologues(
+    read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
+                   remove_rowempty = T),
+    iso_suffix_sep = "_")
+  frac_tb<-calculate_FC(iso_tb)
+} else {
+  frac_tb<-read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
+                          remove_rowempty = T)
+  iso_tb<-NULL
+  merged<-merge_input(meta_tb = meta_formatted_tb,
+                      abund_tb = abund_tb,
+                      frac_tb = frac_tb,
+                      sample_col = sample_column,
+                      compounds = compounds)
+}
 
 #Per compound adapt FC's below 0 (artefacts due to natural abundance
 #correction) to be positive to avoid problems with the visualisations
 #later on.
-for (i in (2:ncol(frac_tb))) {
-  if (any(frac_tb[,i]<0)) {
-    FCs<-pull(frac_tb[,i])
-    FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)])
-    frac_tb[,i]<-FCs
-  }
-}
+# for (i in (2:ncol(frac_tb))) {
+#   if (any(frac_tb[,i]<0)) {
+#     FCs<-pull(frac_tb[,i])
+#     FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)])
+#     frac_tb[,i]<-FCs
+#   }
+# }
 
 #make sure FCposition is set to slice when multiple tracer nutrients
 if (length(unique(pull(meta_formatted_tb[,tracer_column])))>1 & 
@@ -303,13 +345,14 @@ if (length(compounds)<length(colnames(abund_tb)[2:ncol(abund_tb)])) {
 
 #merge all input into one table, get compounds and factor orders
 tb<-merge_input(meta_tb = meta_formatted_tb,abund_tb = abund_tb,frac_tb = frac_tb,
-                compounds=compounds, sample_col = sample_column)
+                compounds=compounds, sample_col = sample_column,
+                iso_tb=iso_tb)
 
 compounds_updated<-colnames(tb)[which(!colnames(tb)%in%
                                         c(colnames(meta_formatted_tb),
                                           "datatype"))]
 
-compounds_updated<-"Citric_acid"  #for checking specific compound only
+compounds_updated<-"Sorbitol"  #for checking specific compound only
 
 #make list of factor orders per factor to allow multiple factors
 fact_order<-list(NULL)
