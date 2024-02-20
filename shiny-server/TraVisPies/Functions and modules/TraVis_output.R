@@ -52,7 +52,8 @@ travis_outputsettings_ui <- function(id) {
       column(12,
              selectInput(NS(id,"compounds"),
                          label=paste0("Select compounds to be plotted, by ",
-                         "default all in input"),
+                         "default all in input. If the download fails, try ",
+                         "doing a smaller subset of compounds at a time."),
                          choices= NULL, multiple = T,width="100%")
       )
     )

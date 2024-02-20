@@ -438,7 +438,6 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
   #Per compound adapt FC's below 0 (artefacts due to natural abundance
   #correction) to be positive to avoid problems with the visualisations
   #later on.
-  print(frac_tb)
   for (i in (2:ncol(frac_tb))) {
     if (any(frac_tb[,i]<0)) {
       FCs<-pull(frac_tb[,i])
@@ -458,8 +457,7 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
         metabolite<-iso_tb$Metabolite[i]
         isos<-iso_tb[i,-c(1,2)]
         negisos<-which(isos<0)
-        print(negisos)
-        
+
         # print(metabolite)
         #if no values negative, skip this section to avoid empty reference  
         #warnings and useless computing. If negatives, no zero correction was done
@@ -999,10 +997,7 @@ corFC_addUnlab<-function(sum_tb_FC,compound,fact_name,tracer_column){
     left_join(select(sum_tb_FC,!c(compound,datatype)),
               by=c(fact_name,tracer_column))%>%
     mutate(datatype=if_else(is.na(datatype),"FracCont",datatype))%>%
-    relocate(P, .after = last_col()) %>%
-  
-    #set labeling as factor
-    mutate(!!tracer_symbol:=as_factor(!!tracer_symbol))
+    relocate(P, .after = last_col())
   
   return(FC_tb)
 }
@@ -1037,8 +1032,11 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
     full_join(summarize_compounddata(
       filter(compound_tb,!datatype %in% c("FracCont","Abund")),
       compound=compound,fact_name = fact_name,tracer_column=tracer_column))%>%
-    rename(FracCont=compound,P.FC=P)
-  
+    rename(FracCont=compound,P.FC=P) %>% 
+    
+    #set labeling as factor
+    mutate(!!tracer_symbol:=as_factor(!!tracer_symbol))
+
   #Get abundance per sample and drop tracer column as we want to sum 
   #disregarding tracer,and P if present as it will be recalculated
   sum_tb_ab<-filter(compound_tb,datatype=="Abund")%>%
@@ -1102,7 +1100,6 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
       #                 Fraction*100<10^-label_decimals/2,"",labFC)
     )
     
-  
   #If required, add * to cohort name if any isotopologue P < 0.05
   #don't add anything if all are NA (reference cohort)
   #todo shiny: add support isotopologues twofactor
@@ -1140,6 +1137,7 @@ make_piechart<-function(slice_tb,compound,tracer_column=tracer_column,
                         alpha=0.7,
                         otherfontsize=10,font="sans",legendtitlesize=10,
                         cohortsize=12,include_legend=T,show_P=T){
+  
   tracer_symbol<-rlang::sym(tracer_column)
   
   #Factor levels will be plotted counterclockwise, so to make order clockwise,
@@ -1358,7 +1356,7 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
                               percent_add = percent_add,
                               FC_position = FC_position,
                               P_isotopologues=P_isotopologues)
-  # print(slice_tb)
+
   if (detail_charts) {
     #plot detailed chart based on information in slice table
     print(paste0("saving detailed chart"))
