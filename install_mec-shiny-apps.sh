@@ -94,6 +94,7 @@ install2.r --error --skipinstalled -r "https://packagemanager.rstudio.com/cran/_
     shinyFeedback \
     shinyjs \
     shinyFiles \
+	shinydisconnect \
     DT \
     colourpicker \
     here \
