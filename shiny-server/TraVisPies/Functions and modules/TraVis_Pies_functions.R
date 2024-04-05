@@ -429,7 +429,7 @@ summarize_isotopologue<-function(iso_tb,sample_colname="Sample"){
   #then transpose from rowwise to columnwise representation
   iso_tb %>% select(-Isotopologue) %>%
     group_by(Metabolite) %>%
-    summarize(across(.fns = ~ paste0(.x,collapse = "|"))) %>%
+    summarize(across(everything(),.fns = ~ paste0(.x,collapse = "|"))) %>%
     t_tibble(first_colname = sample_colname)
 }
 
@@ -441,7 +441,8 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
   for (i in (2:ncol(frac_tb))) {
     if (any(frac_tb[,i]<0)) {
       FCs<-pull(frac_tb[,i])
-      FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)])     
+      FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)])
+      frac_tb[,i]<-FCs
     }
   }
   
@@ -456,7 +457,7 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
         metabolite<-iso_tb$Metabolite[i]
         isos<-iso_tb[i,-c(1,2)]
         negisos<-which(isos<0)
-        
+
         # print(metabolite)
         #if no values negative, skip this section to avoid empty reference  
         #warnings and useless computing. If negatives, no zero correction was done
@@ -996,10 +997,7 @@ corFC_addUnlab<-function(sum_tb_FC,compound,fact_name,tracer_column){
     left_join(select(sum_tb_FC,!c(compound,datatype)),
               by=c(fact_name,tracer_column))%>%
     mutate(datatype=if_else(is.na(datatype),"FracCont",datatype))%>%
-    relocate(P, .after = last_col()) %>%
-  
-    #set labeling as factor
-    mutate(!!tracer_symbol:=as_factor(!!tracer_symbol))
+    relocate(P, .after = last_col())
   
   return(FC_tb)
 }
@@ -1034,8 +1032,11 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
     full_join(summarize_compounddata(
       filter(compound_tb,!datatype %in% c("FracCont","Abund")),
       compound=compound,fact_name = fact_name,tracer_column=tracer_column))%>%
-    rename(FracCont=compound,P.FC=P)
-  
+    rename(FracCont=compound,P.FC=P) %>% 
+    
+    #set labeling as factor
+    mutate(!!tracer_symbol:=as_factor(!!tracer_symbol))
+
   #Get abundance per sample and drop tracer column as we want to sum 
   #disregarding tracer,and P if present as it will be recalculated
   sum_tb_ab<-filter(compound_tb,datatype=="Abund")%>%
@@ -1099,7 +1100,6 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
       #                 Fraction*100<10^-label_decimals/2,"",labFC)
     )
     
-  
   #If required, add * to cohort name if any isotopologue P < 0.05
   #don't add anything if all are NA (reference cohort)
   #todo shiny: add support isotopologues twofactor
@@ -1137,6 +1137,7 @@ make_piechart<-function(slice_tb,compound,tracer_column=tracer_column,
                         alpha=0.7,
                         otherfontsize=10,font="sans",legendtitlesize=10,
                         cohortsize=12,include_legend=T,show_P=T){
+  
   tracer_symbol<-rlang::sym(tracer_column)
   
   #Factor levels will be plotted counterclockwise, so to make order clockwise,
@@ -1355,7 +1356,7 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
                               percent_add = percent_add,
                               FC_position = FC_position,
                               P_isotopologues=P_isotopologues)
-  # print(slice_tb)
+
   if (detail_charts) {
     #plot detailed chart based on information in slice table
     print(paste0("saving detailed chart"))
@@ -1601,51 +1602,51 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 #   }
 # }
 # Test --------------------------------------------------------------------
-#test crash merger
-rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Crashes)"
-path<-gsub("\\\\", "/", rawpath)
-savepath<-path
-metadatafile<-"Input_MCF1711_metadata.csv"
-abundancefile<-"Input_MCF1711_RA.csv"
-tracerfile<-"Input_MCF1711_isotopologues.csv"
-norm_column<-NULL
-(meta_tb<-read_csv_clean(paste0(path,"/",metadatafile),remove_empty = T,
-                remove_rowempty = T))
-sample_column<-colnames(meta_tb)[1]
-cohort_column<-colnames(meta_tb)[2]
-
-meta_formatted_tb<-format_metadata(meta_tb = meta_tb,
-                                   sample_column = sample_column,
-                                   factor_column = cohort_column,
-                                   norm_column = norm_column)
-
-abund_tb<-read_csv_clean(paste0(path,"/",abundancefile),remove_empty = T,
-                        remove_rowempty = T)
-compounds<-colnames(abund_tb[-which(colnames(abund_tb)==sample_column)])
-
-if(grepl("iso",tracerfile)) {
-  iso_tb<-extract_col_isotopologues(
-    read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
-                   remove_rowempty = T),
-    iso_suffix_sep = "_")
-  frac_tb<-calculate_FC(iso_tb)
-  merged<-merge_input(meta_tb = meta_formatted_tb,
-                      abund_tb = abund_tb,
-                      frac_tb = frac_tb,
-                      sample_col = sample_column,
-                      iso_tb = iso_tb,
-                      compounds = compounds)
-  debug(merge_input)
-  undebug(merge_input)
-} else {
-  frac_tb<-read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
-                          remove_rowempty = T)
-  merged<-merge_input(meta_tb = meta_formatted_tb,
-              abund_tb = abund_tb,
-              frac_tb = frac_tb,
-              sample_col = sample_column,
-              compounds = compounds)
-}
+# #test crash merger
+# rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Crashes)"
+# path<-gsub("\\\\", "/", rawpath)
+# savepath<-path
+# metadatafile<-"Input_MCF1711_metadata.csv"
+# abundancefile<-"Input_MCF1711_RA.csv"
+# tracerfile<-"Input_MCF1711_isotopologues.csv"
+# norm_column<-NULL
+# (meta_tb<-read_csv_clean(paste0(path,"/",metadatafile),remove_empty = T,
+#                 remove_rowempty = T))
+# sample_column<-colnames(meta_tb)[1]
+# cohort_column<-colnames(meta_tb)[2]
+# 
+# meta_formatted_tb<-format_metadata(meta_tb = meta_tb,
+#                                    sample_column = sample_column,
+#                                    factor_column = cohort_column,
+#                                    norm_column = norm_column)
+# 
+# abund_tb<-read_csv_clean(paste0(path,"/",abundancefile),remove_empty = T,
+#                         remove_rowempty = T)
+# compounds<-colnames(abund_tb[-which(colnames(abund_tb)==sample_column)])
+# 
+# if(grepl("iso",tracerfile)) {
+#   iso_tb<-extract_col_isotopologues(
+#     read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
+#                    remove_rowempty = T),
+#     iso_suffix_sep = "_")
+#   frac_tb<-calculate_FC(iso_tb)
+#   merged<-merge_input(meta_tb = meta_formatted_tb,
+#                       abund_tb = abund_tb,
+#                       frac_tb = frac_tb,
+#                       sample_col = sample_column,
+#                       iso_tb = iso_tb,
+#                       compounds = compounds)
+#   debug(merge_input)
+#   undebug(merge_input)
+# } else {
+#   frac_tb<-read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
+#                           remove_rowempty = T)
+#   merged<-merge_input(meta_tb = meta_formatted_tb,
+#               abund_tb = abund_tb,
+#               frac_tb = frac_tb,
+#               sample_col = sample_column,
+#               compounds = compounds)
+# }
 
 
 

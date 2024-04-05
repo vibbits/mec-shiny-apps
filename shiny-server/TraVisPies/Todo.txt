@@ -1,3 +1,1 @@
-check negative value problem figures Marco
-
 Verduidlijke bij output textje boven selection box dat je ongewenste stoffen best verwijderd (en dat bij download fail voor meerdere 10tallen compounds je kan proberen in 2 of 3 keer te downen 
