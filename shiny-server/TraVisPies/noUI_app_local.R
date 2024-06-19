@@ -62,44 +62,60 @@ source(here::here("Functions and modules/TraVis_Pies_functions.R"))
 #example: rawpath<-r"(C:\User\Projects\Pie charts)"
 #can also specify relative to the project folder using the here::here command
 
-#test data 1-factor
-# rawpath<-r"(C:\Users\u0134881\Documents\R\Create figures\Pie charts\Pie charts inputfiles\Pie charts 1factor)"
-# path<-gsub("\\\\", "/", rawpath)
-path<-here::here("Example_data/Original input")
+#test data 1-factor no replicates
+rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Other examples for nonUI app\Bram problems 2)"
+path<-gsub("\\\\", "/", rawpath)
+# path<-here::here("Example_data/Original input")
 savepath<-path
-metadatafile<-"Input_Example_metadata.csv"
-abundancefile<-"Input_Example_RA.csv"
-tracerfile<-"Input_Example_FC.csv"
+metadatafile<-"MD.csv"
+abundancefile<-"RA.csv"
+tracerfile<-"FC.csv"
 mapcoordsfile<-"Pathway figure coords.csv"
 read_csv_clean(file=paste(path,metadatafile,sep = "/"),
                remove_empty = T)%>%colnames()
-sample_column <-"Sample"
-factor_column <- "Cohort"   #"None" if not present, or 1 or two element vector
+sample_column <-"Samples"
+factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
 norm_column <- "None"   #"None" if not present
-tracer_column <-"None"                #"None" if not present
+tracer_column <-"None"  
+
+#test data 1-factor
+# rawpath<-r"(C:\Users\u0134881\Documents\R\Create figures\Pie charts\Pie charts inputfiles\Pie charts 1factor)"
+# path<-gsub("\\\\", "/", rawpath)
+# path<-here::here("Example_data/Original input")
+# savepath<-path
+# metadatafile<-"Input_Example_metadata.csv"
+# abundancefile<-"Input_Example_RA.csv"
+# tracerfile<-"Input_Example_FC.csv"
+# mapcoordsfile<-"Pathway figure coords.csv"
+# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
+#                remove_empty = T)%>%colnames()
+# sample_column <-"Sample"
+# factor_column <- "Cohort"   #"None" if not present, or 1 or two element vector
+# norm_column <- "None"   #"None" if not present
+# tracer_column <-"None"                #"None" if not present
 
 #test data 1-factor iso input
 # rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Crashes)"
 # path<-gsub("\\\\", "/", rawpath)
-path<-here::here("Example_data/Original input")
-savepath<-path
-metadatafile<-"Input_Example_metadata.csv"
-abundancefile<-"Input_Example_RA.csv"
-tracerfile<-"Input_Example_isotopologues.csv"
-norm_column<-"None"
-(meta_tb<-read_csv_clean(paste0(path,"/",metadatafile),remove_empty = T,
-                         remove_rowempty = T))
-sample_column<-colnames(meta_tb)[1]
-factor_column<-colnames(meta_tb)[2]
-tracer_column <-"None"                #"None" if not present
-meta_formatted_tb<-format_metadata(meta_tb = meta_tb,
-                                   sample_column = sample_column,
-                                   factor_column = factor_column,
-                                   norm_column = norm_column)
-
-abund_tb<-read_csv_clean(paste0(path,"/",abundancefile),remove_empty = T,
-                         remove_rowempty = T)
-compounds<-colnames(abund_tb[-which(colnames(abund_tb)==sample_column)])
+# path<-here::here("Example_data/Original input")
+# savepath<-path
+# metadatafile<-"Input_Example_metadata.csv"
+# abundancefile<-"Input_Example_RA.csv"
+# tracerfile<-"Input_Example_isotopologues.csv"
+# norm_column<-"None"
+# (meta_tb<-read_csv_clean(paste0(path,"/",metadatafile),remove_empty = T,
+#                          remove_rowempty = T))
+# sample_column<-colnames(meta_tb)[1]
+# factor_column<-colnames(meta_tb)[2]
+# tracer_column <-"None"                #"None" if not present
+# meta_formatted_tb<-format_metadata(meta_tb = meta_tb,
+#                                    sample_column = sample_column,
+#                                    factor_column = factor_column,
+#                                    norm_column = norm_column)
+# 
+# abund_tb<-read_csv_clean(paste0(path,"/",abundancefile),remove_empty = T,
+#                          remove_rowempty = T)
+# compounds<-colnames(abund_tb[-which(colnames(abund_tb)==sample_column)])
 
 
 #test data 2-factor
@@ -337,10 +353,9 @@ tb<-merge_input(meta_tb = meta_formatted_tb,abund_tb = abund_tb,frac_tb = frac_t
                 iso_tb=iso_tb)
 
 compounds_updated<-colnames(tb)[which(!colnames(tb)%in%
-                                        c(colnames(meta_formatted_tb),
-                                          "datatype"))]
+                                        c("Sample","datatype",colnames(meta_formatted_tb)))]
 
-compounds_updated<-"Citric_acid"  #for checking specific compound only
+# compounds_updated<-"L-Glutamate_m5"  #for checking specific compound only
 
 #make list of factor orders per factor to allow multiple factors
 fact_order<-list(NULL)
@@ -381,29 +396,29 @@ generate_multiple_pies(tb,compounds=compounds_updated,
 
 #Todo nonshiny code check FC p value gal6phos = 0.22 without fraction??
 
-debug(corFC_addUnlab)
-undebug(corFC_addUnlab)
-
-debug(prepare_slicedata)
-undebug(prepare_slicedata)
-
-debug(add_FClabels)
-undebug(add_FClabels)
-
-debug(summarize_compounddata)
-undebug(summarize_compounddata)
-
-debug(summarize_addP)
-undebug(summarize_addP)
-
-debug(generate_pie)
-undebug(generate_pie)
-
-debug(make_piechart)
-undebug(make_piechart)
-
-debug(obtain_compounddata)
-undebug(obtain_compounddata)
+# debug(corFC_addUnlab)
+# undebug(corFC_addUnlab)
+# 
+# debug(prepare_slicedata)
+# undebug(prepare_slicedata)
+# 
+# debug(add_FClabels)
+# undebug(add_FClabels)
+# 
+# debug(summarize_compounddata)
+# undebug(summarize_compounddata)
+# 
+# debug(summarize_addP)
+# undebug(summarize_addP)
+# 
+# debug(generate_pie)
+# undebug(generate_pie)
+# 
+# debug(make_piechart)
+# undebug(make_piechart)
+# 
+# debug(obtain_compounddata)
+# undebug(obtain_compounddata)
 
 
 # Overlay pies on map --------------------------------------------------------
