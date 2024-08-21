@@ -320,6 +320,7 @@ travis_outputweb_server <- function(id,v_settings,tb) {
                          pathway_charts=pathway_charts,savepath=getwd(),
                          normalize=v_settings$norm,fact_name=v_settings$fact_name,
                          fact_order=v_settings$fact_order,
+                         tracer_column = v_settings$tracer_column,
                          P_isotopologues = v_settings$P_isotopologues,
                          log_abund = v_settings$log_abund,
                          label_decimals=v_settings$label_decimals,
