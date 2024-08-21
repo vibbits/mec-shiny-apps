@@ -138,7 +138,6 @@ travis_input_server <- function(id) {
     
     #Fileloading input data
     upload_tb<-reactive({
-      req(nchar(input$upload_file$datapath)>0)
       vroom::vroom(input$upload_file$datapath,delim = ",",
                    show_col_types = FALSE)
     })
