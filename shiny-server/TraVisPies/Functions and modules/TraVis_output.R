@@ -52,7 +52,8 @@ travis_outputsettings_ui <- function(id) {
       column(12,
              selectInput(NS(id,"compounds"),
                          label=paste0("Select compounds to be plotted, by ",
-                         "default all in input"),
+                         "default all in input. If the download fails, try ",
+                         "doing a smaller subset of compounds at a time."),
                          choices= NULL, multiple = T,width="100%")
       )
     )
@@ -190,24 +191,32 @@ travis_outputlocal_server <- function(id,v_settings,tb) {
       if (out_settings$plottype() %in% c("Pathway-compatible","Both")) {
         pathway_charts<-T
       }
-
+      
+      
+      #sanitize compound names for dangerous characters
+      compounds <- gsub("/","_",out_settings$compounds())
+      tb_san<-tb()
+      colnames(tb_san)<-gsub("/","_",colnames(tb_san))
+      
+      #start progress bar
       withProgress(message= "Saving plots", value=0, {
-        
+      
         #loop over each compound in input tibble
-        for (compound in out_settings$compounds()) {
+        for (compound in compounds) {
           printmessage<-paste0("Compound ",
-                               which(out_settings$compounds()==compound),
-                               " of ",length(out_settings$compounds()))
+                               which(compounds==compound),
+                               " of ",length(compounds))
           print(printmessage)
           
           # Increment the progress bar, and update the detail text.
-          incProgress(1/length(out_settings$compounds()), 
+          incProgress(1/length(compounds), 
                       detail = printmessage)
           
-          generate_pie(tb(),compound=compound,detail_charts=detail_charts,
+          generate_pie(tb_san,compound=compound,detail_charts=detail_charts,
                        pathway_charts=pathway_charts,savepath=target_savepath,
                        normalize=v_settings$norm,fact_name=v_settings$fact_name,
                        fact_order=v_settings$fact_order,
+                       tracer_column = v_settings$tracer_column,
                        P_isotopologues = v_settings$P_isotopologues,
                        log_abund = v_settings$log_abund,
                        label_decimals=v_settings$label_decimals,
@@ -302,21 +311,27 @@ travis_outputweb_server <- function(id,v_settings,tb) {
           filelist<-c(filelist,"Pie charts pathway/")
         }
         
+        #sanitize compound names for dangerous characters
+        compounds <- gsub("/","_",out_settings$compounds())
+        tb_san<-tb()
+        colnames(tb_san)<-gsub("/","_",colnames(tb_san))
+        
+        # start progress bar
         withProgress(message= "Making plots", value=0, {
           
           #loop over each compound in input tibble
-          for (compound in out_settings$compounds()) {
+          for (compound in compounds) {
             printmessage<-paste0("Compound ",
-                                 which(out_settings$compounds()==compound),
-                                 " of ",length(out_settings$compounds()))
+                                 which(compounds==compound),
+                                 " of ",length(compounds))
             print(printmessage)
             
             # Increment the progress bar, and update the detail text.
-            incProgress(1/length(out_settings$compounds()), 
+            incProgress(1/length(compounds), 
                         detail = printmessage)
             
             print(v_settings$P_isotopologues)
-            generate_pie(tb(),compound=compound,detail_charts=detail_charts,
+            generate_pie(tb_san,compound=compound,detail_charts=detail_charts,
                          pathway_charts=pathway_charts,savepath=getwd(),
                          normalize=v_settings$norm,fact_name=v_settings$fact_name,
                          fact_order=v_settings$fact_order,

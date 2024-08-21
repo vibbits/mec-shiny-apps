@@ -1,0 +1,25 @@
+Sample,Supplementation,Condition,Normalisation,Tracer
+C9 Trac1 no2,No supplement,Control,1,13C6 Nutrient1
+C9 Trac1,Supplement,Control,1,13C6 Nutrient1
+C9 Trac2,Supplement,Control,1,13C6 Nutrient2
+C17 Trac1 no2,No supplement,Control,1,13C6 Nutrient1
+C17 Trac1,Supplement,Control,1,13C6 Nutrient1
+C17 Trac2,Supplement,Control,1,13C6 Nutrient2
+P3 Trac1 no2,No supplement,PGM1-CDG,1,13C6 Nutrient1
+P3 Trac1,Supplement,PGM1-CDG,1,13C6 Nutrient1
+P3 Trac2,Supplement,PGM1-CDG,1,13C6 Nutrient2
+P6 Trac1 no2,No supplement,PGM1-CDG,1,13C6 Nutrient1
+P6 Trac1,Supplement,PGM1-CDG,1,13C6 Nutrient1
+P6 Trac2,Supplement,PGM1-CDG,1,13C6 Nutrient2
+C6 Trac1 no2,No supplement,Control,1,13C6 Nutrient1
+C6 Trac1,Supplement,Control,1,13C6 Nutrient1
+C6 Trac2,Supplement,Control,1,13C6 Nutrient2
+C11 Trac1 no2,No supplement,Control,1,13C6 Nutrient1
+C11 Trac1,Supplement,Control,1,13C6 Nutrient1
+C11 Trac2,Supplement,Control,1,13C6 Nutrient2
+P1 Trac1 no2,No supplement,PGM1-CDG,1,13C6 Nutrient1
+P1 Trac1,Supplement,PGM1-CDG,1,13C6 Nutrient1
+P1 Trac2,Supplement,PGM1-CDG,1,13C6 Nutrient2
+P5 Trac1 no2,No supplement,PGM1-CDG,1,13C6 Nutrient1
+P5 Trac1,Supplement,PGM1-CDG,1,13C6 Nutrient1
+P5 Trac2,Supplement,PGM1-CDG,1,13C6 Nutrient2

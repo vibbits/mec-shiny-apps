@@ -37,6 +37,8 @@ library(shinyjs)      #for show/hide button
 library(shinyFiles)   #for saving locally
 library(here)    #to make r source from file location instead of magic stuff
 library(DT)      #to display interactive data tables in shiny
+library(shinydisconnect) #to adapt disconnection message
+
 
 #library for calling helper functions from r script
 source(here::here("Functions and modules/TraVis_Pies_functions.R"))
@@ -196,6 +198,14 @@ tibble_weboutput_server <- function(id,tb) {
 #Cleaner module-------------------------------------------------------------------
 travis_cleaner_ui <- function(id) {
   fluidPage(
+    #set disconnect message
+    disconnectMessage(
+      paste0("The application crashed, which almost always means there is an ",
+             "unexpected problem in one of the input files. Compare your input ",
+             "files to the downloadable example files in the app, only ",
+             "contact me when sure there is no issue with the input.")
+      ),
+
     #load shiny package elements
     shinyFeedback::useShinyFeedback(),
     useShinyjs(),    ## IMPORTANT: so shiny knows to use the shinyjs library
@@ -404,7 +414,6 @@ travis_cleaner_ui <- function(id) {
 travis_cleaner_server <- function(id,local_version=T) {
   moduleServer(id,function(input, output, session) {
     
-    
     #reactive value prepared for storing merged_tb, initialized as NA
     #for tests until a table is generated
     v<-reactiveValues(merged_tb=data.frame(NA),
@@ -490,48 +499,56 @@ travis_cleaner_server <- function(id,local_version=T) {
 
     #set to tibbles to newly uploaded corresponding data
     observeEvent(input$meta3_FC_file,{
-      meta_tb(read_csv_clean(input$meta3_FC_file$datapath,remove_empty = T))
+      meta_tb(read_csv_clean(input$meta3_FC_file$datapath,remove_empty = T,
+                             remove_rowempty = T))
       }
     )
     
     observeEvent(input$meta3_iso_file,{
-      meta_tb(read_csv_clean(input$meta3_iso_file$datapath,remove_empty = T))
+      meta_tb(read_csv_clean(input$meta3_iso_file$datapath,remove_empty = T,
+                             remove_rowempty = T))
     })
 
     observeEvent(input$meta2_file,{
-      meta_tb(read_csv_clean(input$meta2_file$datapath,remove_empty = T))
+      meta_tb(read_csv_clean(input$meta2_file$datapath,remove_empty = T,
+                             remove_rowempty = T))
     })
     
     observeEvent(input$abund_FC_file,{
-      abund_tb(read_csv_clean(input$abund_FC_file$datapath,remove_empty = T))
+      abund_tb(read_csv_clean(input$abund_FC_file$datapath,remove_empty = T,
+                              remove_rowempty = T))
     })
     
     observeEvent(input$abund_iso_file,{
       abund_tb(read_csv_clean(input$abund_iso_file$datapath,
-                              remove_empty = T))
+                              remove_empty = T,
+                              remove_rowempty = T))
     })
     
     observeEvent(input$frac_file,{
       frac_tb(read_csv_clean(input$frac_file$datapath,remove_empty = T,
-                             perc_to_num = T))
+                             perc_to_num = T,
+                             remove_rowempty = T))
     })
     
     observeEvent(input$iso_col_file,{
       #Load in slightly cleaned iso data for checks
       iso_col_tb(read_csv_clean(input$iso_col_file$datapath,remove_empty = T,
-             perc_to_num = T))
+             perc_to_num = T,
+             remove_rowempty = T))
 
       #Transform columnwise iso data to rowwise iso data for easier further 
       #calculations. Assumes iso label separator suffix is "_"
       iso_tb(extract_col_isotopologues(iso_col_tb(),iso_suffix_sep = "_"))
-      print(iso_tb)
+      # print(iso_tb)
       
       #calculate fractional contribution from isotopologue data
       frac_tb(calculate_FC(iso_tb()))
     })
     
     observeEvent(input$iso_et_file,{
-      iso_et_tb(read_csv_clean(input$iso_et_file$datapath,remove_empty = T))
+      iso_et_tb(read_csv_clean(input$iso_et_file$datapath,remove_empty = T,
+                               remove_rowempty = T))
       
       #Calculate abundances from escher trace input
       abund_tb(extract_et_abund(iso_et_tb()))
@@ -550,9 +567,12 @@ travis_cleaner_server <- function(id,local_version=T) {
         #only set if files are uploaded
         req(length(input$meta3_FC_file)*
               length(input$abund_FC_file)* length(input$frac_file)>0)
-        meta_tb(read_csv_clean(input$meta3_FC_file$datapath,remove_empty = T))
-        abund_tb(read_csv_clean(input$abund_FC_file$datapath,remove_empty = T))
-        frac_tb(read_csv_clean(input$frac_file$datapath,remove_empty = T))
+        meta_tb(read_csv_clean(input$meta3_FC_file$datapath,remove_empty = T,
+                               remove_rowempty = T))
+        abund_tb(read_csv_clean(input$abund_FC_file$datapath,remove_empty = T,
+                                remove_rowempty = T))
+        frac_tb(read_csv_clean(input$frac_file$datapath,remove_empty = T,
+                               remove_rowempty = T))
         iso_tb(tibble(NA))
       }
       
@@ -561,11 +581,14 @@ travis_cleaner_server <- function(id,local_version=T) {
         req(length(input$meta3_iso_file)*
               length(input$abund_iso_file)* length(input$iso_col_file)>0)
         meta_tb(read_csv_clean(input$meta3_iso_file$datapath,
-                               remove_empty = T))
+                               remove_empty = T,
+                               remove_rowempty = T))
         abund_tb(read_csv_clean(input$abund_iso_file$datapath,
-                                remove_empty = T))
+                                remove_empty = T,
+                                remove_rowempty = T))
         iso_col_tb(read_csv_clean(input$iso_col_file$datapath,remove_empty = T,
-                                  perc_to_num = T))
+                                  perc_to_num = T,
+                                  remove_rowempty = T))
         frac_tb(tibble(NA))
         
         #Only if columnwise iso data loaded
@@ -582,9 +605,11 @@ travis_cleaner_server <- function(id,local_version=T) {
         req(length(input$meta2_file)*
               length(input$iso_et_file)>0)
         req(nrow(meta_tb())*ncol(meta_tb())>0)
-        meta_tb(read_csv_clean(input$meta2_file$datapath,remove_empty = T))
+        meta_tb(read_csv_clean(input$meta2_file$datapath,remove_empty = T,
+                               remove_rowempty = T))
         iso_et_tb(read_csv_clean(input$iso_et_file$datapath,remove_empty = T,
-                                  perc_to_num = T))
+                                  perc_to_num = T,
+                                 remove_rowempty = T))
         abund_tb(tibble(NA))
         frac_tb(tibble(NA))
         
@@ -603,8 +628,8 @@ travis_cleaner_server <- function(id,local_version=T) {
     output$input_valid <- renderText({
       if (input$input_type=="3file_FC") {
         #only evaluate once all files loaded, standard valid is FALSE
-        req(nrow(meta_tb())*ncol(meta_tb())*nrow(abund_tb())*ncol(abund_tb())*
-              nrow(frac_tb())*ncol(frac_tb())>0)
+        req(min(nrow(meta_tb()),nrow(abund_tb()),nrow(frac_tb()))>1)
+
         #check if at least one column name appears in all input datasets, required
         #for sample column. Do not continue
         common_column<- 0 < length(get_common_elements(colnames(meta_tb()),
@@ -835,7 +860,8 @@ travis_cleaner_server <- function(id,local_version=T) {
       meta_formatted_tb<-format_metadata(meta_tb = meta_tb(),
                                          sample_column = input$sample_column,
                                          factor_column = input$cohort_column,
-                                         norm_column = input$norm_column)
+                                         norm_column = input$norm_column,
+                                         )
 
       if (input$input_type=="3file_FC") {
         v$merged_tb<-merge_input(meta_tb = meta_formatted_tb,
@@ -844,7 +870,7 @@ travis_cleaner_server <- function(id,local_version=T) {
                                  sample_col = input$sample_column,
                                  compounds = input$compounds)
       } else {
-        print(iso_tb)
+        # print(iso_tb)
         v$merged_tb<-merge_input(meta_tb = meta_formatted_tb,
                                  abund_tb = abund_tb(),
                                  frac_tb = frac_tb(),
