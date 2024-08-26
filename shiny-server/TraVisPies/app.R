@@ -27,7 +27,8 @@
 #Do not change below setting unless you know what you are doing!
 
 #indicate whether local version of code should be used, otherwise uses web version,
-#reason: change how output files should be saved (locally or with download)
+#reason 1) change how output files should be saved (resp. locally or with download)
+#reason 2) Fonts have to be obtained differently
 local_version<-F      
 
 #closes the R session when the application window is closed. Only required
@@ -110,7 +111,7 @@ ui <- fluidPage(
   #App explanation text
   fluidRow(
     column(
-      4,titlePanel(h1("Travis Pies v1.3"))
+      4,titlePanel(h1("Travis Pies v1.31"))
     ),
     column(
       3,downloadButton(outputId= "down_manual",

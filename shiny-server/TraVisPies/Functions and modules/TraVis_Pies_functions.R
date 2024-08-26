@@ -393,7 +393,6 @@ summarize_isotopologue<-function(iso_tb,sample_colname="Sample"){
 
 merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
                           sample_col="Sample",compounds) {
-  print(meta_tb)
   #Per compound adapt FC's below 0 (artefacts due to natural abundance
   #correction) to be positive to avoid problems with the visualisations
   #later on.
@@ -431,17 +430,19 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
           #parent to compensate negative values
           parent_index<-which(iso_tb$Metabolite==metabolite & 
                                 iso_tb$Isotopologue==0)
+
           iso_tb[parent_index,-c(1,2)]<-iso_tb[parent_index,-c(1,2)]+toadd
-          
+    
           #if any parents became <0, set to 0 (likely parent was undetectable)
-          iso_tb[parent_index,][which(iso_tb[parent_index,]<0)]<-0
+          iso_tb[parent_index,-c(1,2)][which(iso_tb[parent_index,-c(1,2)]<0)]<-0
         }
         
       }
     }
-    
+
     #summarize isotopologue data with name sample column
     iso_tb<-summarize_isotopologue(iso_tb,sample_colname = sample_col)
+
   }
   
   #rename sample column in all inputs
@@ -504,8 +505,6 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
   frac_tb <-frac_tb %>% mutate(across(any_of(compounds),as.character)) %>%
     add_column(datatype="FracCont")
  
-  print(frac_tb)
-  print(iso_tb)
   if(!length(iso_tb)==0) {
     iso_tb$datatype<-"Isotopologues"
     frac_tb<-full_join(frac_tb,iso_tb,by=colnames(frac_tb))
@@ -601,66 +600,64 @@ summarize_addP<-function(tb,cohortcolumn,valuecolumn,
   } else {
     tb$datatype<-data_type
   }
-  
-  
-  #initialize tibble for output with one entry per factor level each for all
+
+    #initialize tibble for output with one entry per factor level each for all
   #datatypes, with initialized column for p values, and an index noting
   #the last row in the P column that received data
   tb_out<-unique(tb[,-which(colnames(tb)==valuecolumn)])
   tb_out$P<-NA
   index<-0
-  
+
   #if only 1 cohort is provided, set P to 1 for further checking
   if (!length(unique(pull(tb[,cohortcolumn])))>1) {
     tb_out$P<-99
-    return(tb_out)
-  }
-  
-  #loop over datatypes supplied
-  for (j in unique(tb$datatype)){
-    #create a separate tibble for each datatype to extract values
-    datatype_selected<-j
-    tb_type<-filter(tb,datatype==datatype_selected)
-    
-    #get cohorts names, extract first cohort as reference cohort, 
-    #and obtain values of this cohort
-    cohorts<-unique(pull(tb_type[,cohortcolumn]))
-    refcohort<-cohorts[1]
-    refvalues<-pull(tb_type[which(pull(tb_type[,cohortcolumn])==refcohort),
-                            valuecolumn])
-    
-    #loop over target (non-reference) cohorts 
-    for (i in 2:length(cohorts)) {  
-      #extract values for current cohort
-      tgtcohort<-cohorts[i]
-      tgtvalues<-pull(tb_type[which(pull(tb_type[,cohortcolumn])==tgtcohort),
+  } else {
+    #loop over datatypes supplied
+    for (j in unique(tb$datatype)){
+      #create a separate tibble for each datatype to extract values
+      datatype_selected<-j
+      tb_type<-filter(tb,datatype==datatype_selected)
+      
+      #get cohorts names, extract first cohort as reference cohort, 
+      #and obtain values of this cohort
+      cohorts<-unique(pull(tb_type[,cohortcolumn]))
+      refcohort<-cohorts[1]
+      refvalues<-pull(tb_type[which(pull(tb_type[,cohortcolumn])==refcohort),
                               valuecolumn])
       
-      
-      #make P resultstring. If only one entry in cohort, show that no P could be
-      #calculated by setting value to 99.
-      #Otherwise perform appropriate test depending on datatype.
-      #t.test for abundance data and kruskal wallis for fraccont or iso
-      #Set P=1 if all values are the same(likely 0) resulting in NaN. Make 
-      #string depending on datatype
-      if (length(tgtvalues)==1|length(refvalues)==1) {
-        tb_out$P[index+i]<-99
-      } else {
-        if (datatype_selected=="Abund"){
-          p<-t.test(refvalues,tgtvalues,)$p.value
-          if (is.nan(p)) p<-1                 
-          tb_out$P[index+i]<-p
+      #loop over target (non-reference) cohorts 
+      for (i in 2:length(cohorts)) {  
+        #extract values for current cohort
+        tgtcohort<-cohorts[i]
+        tgtvalues<-pull(tb_type[which(pull(tb_type[,cohortcolumn])==tgtcohort),
+                                valuecolumn])
+        
+        
+        #make P resultstring. If only one entry in cohort, show that no P could be
+        #calculated by setting value to 99.
+        #Otherwise perform appropriate test depending on datatype.
+        #t.test for abundance data and kruskal wallis for fraccont or iso
+        #Set P=1 if all values are the same(likely 0) resulting in NaN. Make 
+        #string depending on datatype
+        if (length(tgtvalues)==1|length(refvalues)==1) {
+          tb_out$P[index+i]<-99
         } else {
-          p<-kruskal.test(c(refvalues,tgtvalues),
-                          c(rep("Reference",length(refvalues)),
-                            rep("Target",length(tgtvalues))))$p.value             
-          if (is.nan(p)) p<-1                 
-          tb_out$P[index+i]<-p
+          if (datatype_selected=="Abund"){
+            p<-t.test(refvalues,tgtvalues,)$p.value
+            if (is.nan(p)) p<-1                 
+            tb_out$P[index+i]<-p
+          } else {
+            p<-kruskal.test(c(refvalues,tgtvalues),
+                            c(rep("Reference",length(refvalues)),
+                              rep("Target",length(tgtvalues))))$p.value             
+            if (is.nan(p)) p<-1                 
+            tb_out$P[index+i]<-p
+          }
         }
       }
+      #raise index by amount of cohorts in last set
+      index<-index+i
     }
-    #raise index by amount of cohorts in last set
-    index<-index+i
   }
   
   #set datatypes to P labels to be output
@@ -723,7 +720,7 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,
                                !!compound)%>%
     summarize_addP(cohortcolumn = fact_name,valuecolumn = compound,
                    data_type = "checkColumn")%>%
-    pivot_wider(names_from=datatype,values_from=P) 
+    pivot_wider(names_from=datatype,values_from=P)
   
   #get mean abundance and fractional contribution per cohort factor level
   #then join with P data from above.
@@ -744,7 +741,6 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,
            Unlabeled=(1-FracCont)*Abund) %>%  
     pivot_longer(Labeled:Unlabeled,names_to="Labeling",values_to="Fraction") %>%
     mutate(FracCont=if_else(Labeling=="Unlabeled",1-FracCont,FracCont))
-  
   
   #sets Labeling column factor order to unlabeled then labeled, makes 
   #make_piechart plotting function result more intuitive
@@ -943,6 +939,7 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
   } else {
     compound_tb<-parse_isos_torow(compound_tb,valuecolumn = compound) %>%
       mutate(across(!!compound,as.numeric))
+    
   }
   
   #make table with summarized data in the right format for pie creation
@@ -1464,45 +1461,45 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 
 
 #test input merging -----------------------------------------------------------------------
-meta_tb<-read_csv_clean(paste0(getwd(),
-                               "/Example_data/Original input/Input_Example_metadata.csv"),
-                        remove_empty = T,perc_to_num = F)
-# meta_tb[,3]<-1
-abund_tb<-read_csv_clean(paste0(getwd(),
-                                "/Example_data/Original input/Input_Example_RA.csv"),
-                         remove_empty = T,perc_to_num = F)
-iso_et_tb<-read_csv_clean(paste0(getwd(),
-                                 "/Example_data/Original input/Input_Example_RA.csv"),
-                          remove_empty = F,perc_to_num = F)
-iso_col_tb<-read_csv_clean(paste0(getwd(),
-                                  "/Example_data/Original input/Input_Example_isotopologues.csv"),
-                           remove_empty = T,perc_to_num = T)
-iso_tb<-extract_col_isotopologues(iso_col_tb) %>%
-    slice(-c(5,6,7,8))
-
-# iso_tb<-extract_et_isotopologues(iso_et_tb) %>%
-#   slice(-c(5,6,7,8))
-
-# abund_tb<-extract_et_abund(iso_et_tb,sample_colname = "Sample")
-
-frac_tb<-calculate_FC(iso_tb,sample_colname = "Sample")
-
-sample_col<-"Sample"
-
-compounds<-colnames(abund_tb)[-1]
-head(meta_tb)
-(meta_formatted_tb<-format_metadata(meta_tb,sample_column = "Sample",
-                                   factor_column = "Cohort",
-                                   norm_column = "None"))
-
-test<-merge_input(meta_tb = meta_formatted_tb,
-                  abund_tb = abund_tb,
-                  frac_tb = frac_tb,
-                  iso_tb=iso_tb,
-                  sample_col = sample_col,
-                  compounds = compounds)
-
-abund_tb<-abund_tb %>%mutate(across(-c(1:3),as.character)) 
+# meta_tb<-read_csv_clean(paste0(getwd(),
+#                                "/Example_data/Original input/Input_Example_metadata.csv"),
+#                         remove_empty = T,perc_to_num = F)
+# # meta_tb[,3]<-1
+# abund_tb<-read_csv_clean(paste0(getwd(),
+#                                 "/Example_data/Original input/Input_Example_RA.csv"),
+#                          remove_empty = T,perc_to_num = F)
+# iso_et_tb<-read_csv_clean(paste0(getwd(),
+#                                  "/Example_data/Original input/Input_Example_RA.csv"),
+#                           remove_empty = F,perc_to_num = F)
+# iso_col_tb<-read_csv_clean(paste0(getwd(),
+#                                   "/Example_data/Original input/Input_Example_isotopologues.csv"),
+#                            remove_empty = T,perc_to_num = T)
+# iso_tb<-extract_col_isotopologues(iso_col_tb) %>%
+#     slice(-c(5,6,7,8))
+# 
+# # iso_tb<-extract_et_isotopologues(iso_et_tb) %>%
+# #   slice(-c(5,6,7,8))
+# 
+# # abund_tb<-extract_et_abund(iso_et_tb,sample_colname = "Sample")
+# 
+# frac_tb<-calculate_FC(iso_tb,sample_colname = "Sample")
+# 
+# sample_col<-"Sample"
+# 
+# compounds<-colnames(abund_tb)[-1]
+# head(meta_tb)
+# (meta_formatted_tb<-format_metadata(meta_tb,sample_column = "Sample",
+#                                    factor_column = "Cohort",
+#                                    norm_column = "None"))
+# 
+# test<-merge_input(meta_tb = meta_formatted_tb,
+#                   abund_tb = abund_tb,
+#                   frac_tb = frac_tb,
+#                   iso_tb=iso_tb,
+#                   sample_col = sample_col,
+#                   compounds = compounds)
+# 
+# abund_tb<-abund_tb %>%mutate(across(-c(1:3),as.character)) 
 
 
 
