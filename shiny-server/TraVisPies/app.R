@@ -29,7 +29,7 @@
 #indicate whether local version of code should be used, otherwise uses web version,
 #reason 1) change how output files should be saved (resp. locally or with download)
 #reason 2) Fonts have to be obtained differently
-local_version<-F      
+local_version<-F    
 
 #closes the R session when the application window is closed. Only required
 #when running as a standalone app, could be annoying or troublesome otherwise

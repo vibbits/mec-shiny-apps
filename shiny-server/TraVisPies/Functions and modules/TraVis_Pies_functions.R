@@ -915,12 +915,13 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
   
   print(paste0("Processing ",compound))
   
-  #prepare filename
+  #prepare filename, remove problematic characters
   if (normalize) {
     plotfilename<-paste0("pies normalized ",compound,".",format)
   } else {
     plotfilename<-paste0("pies ",compound,".",format)
   }
+  plotfilename<-gsub("/","-",plotfilename)
   
   #get table with only measured compound data, then a table summarizing
   #derived means and p values per cohort for abundance and one for fractional
