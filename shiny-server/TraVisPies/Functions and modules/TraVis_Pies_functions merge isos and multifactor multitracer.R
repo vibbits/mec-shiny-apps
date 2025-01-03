@@ -423,7 +423,7 @@ check_samples_compounds<-function(meta_tb,abund_tb,frac_tb,sample_column,
 #Summarize extracted isotopologue data as a single row per sample 
 #containing for each metabolite a string with all contributions from lowest to 
 #highest isotopologue in order separated by |
-summarize_isotopologue<-function(iso_tb,sample_colname="Sample"){
+summarize_isotopologue<-function(iso_tb,sample_colname="Sample",){
   #remove isotopologue column, group per metabolite and generate single string
   #per metabolite for each sample
   #then transpose from rowwise to columnwise representation
@@ -434,7 +434,7 @@ summarize_isotopologue<-function(iso_tb,sample_colname="Sample"){
 }
 
 merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
-                          sample_col="Sample",compounds) {
+                      sample_col="Sample",compounds,summarize_isos=T) {
   #Per compound adapt FC's below 0 (artefacts due to natural abundance
   #correction) to be positive to avoid problems with the visualisations
   #later on.
@@ -484,9 +484,18 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
     }
     
     #if desired (needed in travis pies) summarize isotopologue data with name
-    #sample column
+    #sample column, otherwise make row per sample isotopologue combo with
+    #isotopologue_isotopologueNR as datatype
     if (summarize_isos) {
       iso_tb<-summarize_isotopologue(iso_tb,sample_colname = sample_col)
+    } else {
+      iso_tb<-iso_tb %>% 
+        mutate(datatype=paste0("Isotopologue_",as.character(Isotopologue))) %>%
+        select(Metabolite,datatype,everything(),-Isotopologue) %>%
+        pivot_longer(3:ncol(.),names_to = "Sample",values_to = "value") %>%
+        pivot_wider(names_from = Metabolite,values_from = value)%>%
+        select(Sample,everything())%>%
+        mutate(across(any_of(compounds),as.character))
     }
   }
   
@@ -506,8 +515,9 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
     select(1:ncol(meta_tb),any_of(colnames(abund_tb))) 
   
   if(!length(iso_tb)==0) {
-    iso_tb<-left_join(meta_tb,iso_tb,by="Sample") %>%
-      select(1:ncol(meta_tb),any_of(colnames(abund_tb)))
+    iso_tb<-left_join(iso_tb,meta_tb,by="Sample") %>%
+      select(any_of(colnames(meta_tb)),datatype,any_of(colnames(abund_tb)))%>%
+      filter(Sample %in% meta_tb$Sample)
   }
   
   #add fractional contribution and isotopologues equal to 100% unlabeled to 
@@ -551,16 +561,20 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
     add_column(datatype="FracCont")
 
   if(!length(iso_tb)==0) {
-    iso_tb$datatype<-"Isotopologues"
+    # iso_tb$datatype<-"Isotopologues"
     frac_tb<-full_join(frac_tb,iso_tb,by=colnames(frac_tb))
   }
 
   tb<-full_join(frac_tb,abund_tb,by=colnames(abund_tb))
 
   
-  #join all tables then order and remove normalisation factor if present
+  #join all tables then order and put in long format
+  #remove normalisation factor if present
   tb<-full_join(frac_tb,abund_tb,by=colnames(abund_tb)) %>%
-    select(colnames(meta_tb),datatype,everything())
+    select(colnames(meta_tb),datatype,everything())%>%
+    pivot_longer(-c(any_of(colnames(meta_tb)),datatype),names_to = "compound",
+                 values_to = "value")%>%
+    na_omit()
   
   if ("Normalisation" %in% colnames(meta_tb)) {
     tb<-select(tb,-Normalisation) 
@@ -574,7 +588,7 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
 #levels and set factor order
 #need to use !! for dynamic variable names in tidyverse selection
 #see https://stackoverflow.com/questions/50537164/summarizing-by-dynamic-column-name-in-dplyr 
-obtain_compounddata<-function(tb,compound,fact_name,tracer_column,
+obtain_compounddata<-function(tb,selected_compound,fact_name,tracer_column,
                               fact_order=unique(pull(tb,!!fact_name)),
                               normalize=F){
   #prepare factor name symbol to use as target column name for mutate
@@ -582,10 +596,12 @@ obtain_compounddata<-function(tb,compound,fact_name,tracer_column,
   # abundances
   fact_symbol<-rlang::syms(fact_name)
   tracer_symbol<-rlang::sym(tracer_column)
-  compound_tb<-tb %>% select(!!fact_name,datatype,!!compound,
+  compound_tb<-tb %>% select(!!fact_name,datatype,compound,value,
                              !!tracer_symbol) %>%
     filter(datatype %in% c("FracCont","Isotopologues",
-                           if_else(normalize,"NormAbund","Abund")))
+                           if_else(normalize,"NormAbund","Abund")),
+           compound==selected_compound)%>%
+    select(-compound)
   
   for(i in 1:length(fact_symbol)) {
     # select only given factor levels, then drops unused levels
@@ -766,7 +782,7 @@ add_FClabels<-function(slice_tb,label_decimals,percent_add,fact_name,
 #then adds the P values calculated of each tracer per 
 #combination of tracer and cohort factors
 #drop grouping structure afterwards to avoid unexpected issues in the future
-summarize_compounddata<-function(compound_tb,compound,fact_name,tracer_column){
+summarize_compounddata_old<-function(compound_tb,compound,fact_name,tracer_column){
   #factors and compounds need to be symbolized to use in 
   #tidyverse grouping function
   fact_symbols<-rlang::syms(fact_name) #list of symbols if multiple names
@@ -785,7 +801,7 @@ summarize_compounddata<-function(compound_tb,compound,fact_name,tracer_column){
   #fractional contribution for each tracer per combination of tracer and cohort 
   #factors. Then joins to means and move P column to end
   tb_withP<-compound_tb %>% select(!!tracer_symbol,!!fact_name,datatype,
-                                   !!compound)
+                                   any_of(!!compound))
   if (length(fact_name)==2){
     tb_withP<-group_by(tb_withP,!!tracer_symbol,!!!rlang::syms(fact_name[2]))
   } else if (length(fact_name)==1){
@@ -797,9 +813,42 @@ summarize_compounddata<-function(compound_tb,compound,fact_name,tracer_column){
     right_join(sum_tb)%>%
     relocate(P, .after = last_col())
 }
+summarize_compounddata<-function(compound_tb,fact_name,tracer_column){
+  #factors and compounds need to be symbolized to use in 
+  #tidyverse grouping function
+  fact_symbols<-rlang::syms(fact_name) #list of symbols if multiple names
+  # comp_symbol<- rlang::sym(compound) #one symbol
+  tracer_symbol<-rlang::sym(tracer_column) #one symbol
+  
+  #get mean abundance and fractional contribution of each tracer per 
+  #combination of tracer and cohort factors
+  #need to use !! for dynamic variable names from one symbol and to 
+  #use !!!  to symbolize list of symbols for group/summarise strings
+  #see https://stackoverflow.com/questions/50537164/summarizing-by-dynamic-column-name-in-dplyr
+  sum_tb<-group_by(compound_tb,!!tracer_symbol,!!! fact_symbols,datatype)%>%
+    summarise(value := mean(value),.groups = "drop")
+  
+  #Calculates p values of significance tests of both relative abundance, and
+  #fractional contribution for each tracer per combination of tracer and cohort 
+  #factors. Then joins to means and move P column to end
+  tb_withP<-compound_tb %>% select(!!tracer_symbol,!!fact_name,datatype,value)
+  if (length(fact_name)==2){
+    tb_withP<-group_by(tb_withP,!!tracer_symbol,!!!rlang::syms(fact_name[2]))
+  } else if (length(fact_name)==1){
+    tb_withP<-group_by(tb_withP,!!tracer_symbol)
+  }
+  tb_withP<-group_modify(tb_withP,~summarize_addP(.x,cohortcolumn = fact_name[1],
+                                                  valuecolumn = value,
+                                                  data_type = "checkColumn"))%>%
+    ungroup()%>%
+    right_join(sum_tb)%>%
+    relocate(P, .after = last_col())
+}
 
+#todo remove useless compound references everywhere as column is now "value"
+# also comp_symbol
 #add average unlabeled FC to summarized table with labeled FC's
-corFC_addUnlab<-function(sum_tb_FC,compound,fact_name,tracer_column){
+corFC_addUnlab<-function(sum_tb_FC,fact_name,tracer_column){
   #tidyverse grouping function
   tracer_symbol<-rlang::sym(tracer_column)
   nutrient_symbols<-rlang::syms(unique(pull(sum_tb_FC[,tracer_column])))
@@ -809,7 +858,7 @@ corFC_addUnlab<-function(sum_tb_FC,compound,fact_name,tracer_column){
   #in right format by joining to required info and entering missing info
   FC_tb<-sum_tb_FC%>%
     select(!P)%>%
-    pivot_wider(names_from=!!tracer_symbol,values_from=compound,
+    pivot_wider(names_from=!!tracer_symbol,values_from=value,
                 values_fill = 0) %>%
     rowwise()%>%   #require to make sum function on next line work per row
     mutate(across(c(!!!nutrient_symbols),
@@ -818,8 +867,8 @@ corFC_addUnlab<-function(sum_tb_FC,compound,fact_name,tracer_column){
            Unlabeled = 1-sum(!!!nutrient_symbols)) %>%
     ungroup()%>%        #undo rowwise grouping
     pivot_longer(c(!!!nutrient_symbols,Unlabeled),names_to = tracer_column,
-                 values_to = compound)%>%
-    left_join(select(sum_tb_FC,!c(compound,datatype)),
+                 values_to = value)%>%
+    left_join(select(sum_tb_FC,!c(value,datatype)),
               by=c(fact_name,tracer_column))%>%
     
     #todo test if below works for isotopologue data
@@ -844,15 +893,14 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
   #factors and compounds need to be symbolized to use in 
   #tidyverse grouping function
   fact_symbols<-rlang::syms(fact_name) #list of symbols if multiple names
-  comp_symbol<- rlang::sym(compound) #one symbol
+  # comp_symbol<- rlang::sym(compound) #one symbol
   tracer_symbol<-rlang::sym(tracer_column) #one symbol
   
   #Calculates p values of significance tests of both relative abundance, and
   #fractional contribution per cohort factor level per tracer.
-  P_tb<-compound_tb %>% select(!!fact_name,datatype,
-                               !!compound,
+  P_tb<-compound_tb %>% select(!!fact_name,datatype,value,
                                !!tracer_column)%>%
-    summarize_addP(cohortcolumn = fact_name,valuecolumn = compound,
+    summarize_addP(cohortcolumn = fact_name,valuecolumn = value,
                    data_type = "checkColumn")%>%
     pivot_wider(names_from=datatype,values_from=P) 
   
@@ -864,8 +912,20 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
   #that is labeled, the part that is unlabeled, and finally the fractional 
   #contribution of the unlabeled part. Format as table with two entries
   #factor level, one for the labeled part and one for the unlabeled part
-  sum_tb<-group_by(compound_tb,!! fact_symbol,datatype)%>%
-    summarise(!!compound := mean(!!comp_symbol),.groups = "drop")%>%
+  sum_tb_FC<-summarize_compounddata(compound_tb,fact_name = fact_name,
+                                    tracer_column=tracer_column)%>%
+    corFC_addUnlab(fact_name = fact_name,
+                      tracer_column=tracer_column)%>%
+    full_join(summarize_compounddata(
+      filter(compound_tb,!datatype %in% c("FracCont","Abund")),
+      fact_name = fact_name,tracer_column=tracer_column))%>%
+    rename(FracCont=compound,P.FC=P) %>% 
+    
+    #set labeling as factor
+    mutate(!!tracer_symbol:=as_factor(!!tracer_symbol))
+
+  sum_tb<-group_by(compound_tb,!!fact_symbols,datatype)%>%
+    summarise(!!compound := mean(!!value),.groups = "drop")%>%
     left_join(P_tb)%>%
     pivot_wider(names_from=datatype,values_from=!!compound)%>% 
     #repeat log abund n() times so amount matches amount of data entries as 
@@ -875,6 +935,7 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
            Unlabeled=(1-FracCont)*Abund) %>%  
     pivot_longer(Labeled:Unlabeled,names_to="Labeling",values_to="Fraction") %>%
     mutate(FracCont=if_else(Labeling=="Unlabeled",1-FracCont,FracCont))
+  
   
   #sets Labeling column factor order to unlabeled then labeled, makes 
   #make_piechart plotting function result more intuitive

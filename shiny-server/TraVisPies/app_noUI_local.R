@@ -53,7 +53,8 @@ library(tidyr)        #for restructuring data tibbles
 library(ggplot2)      #for generating the pie chart plots
 
 #load functions to support the app 
-source(here::here("Functions and modules/TraVis_Pies_functions.R"))
+# source(here::here("Functions and modules/TraVis_Pies_functions.R"))
+source(here::here("Functions and modules/TraVis_Pies_functions merge isos and multifactor multitracer.R"))
 
 # User input -------------------------------------------------------------------
 #Data file locations and specifications
@@ -173,7 +174,7 @@ tracer_column <-"None"                #"None" if not present
 # tracer_column <-"Tracer"                #"None" if not present
 
 #Miscellaneous
-P_isotopologues<-F                     #leave at false, only input fraction contribution data 
+P_isotopologues<-T                    #leave at false, only input fraction contribution data 
 log_abund<-F
 detail_charts<-T                      #makes images with detail for solo use
 pathway_charts<-F                        #also generate images fit for pathway 
@@ -296,15 +297,13 @@ abund_tb<-read_csv_clean(paste(path,abundancefile,sep = "/"),remove_empty = T)
 
 #read isotopologue or fractional contribution data. Set empty isotopologue tibble
 #if no isotopologue data supplied
-if(grepl("iso",tracerfile)) {
-  iso_tb<-extract_col_isotopologues(
-    read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
-                   remove_rowempty = T),
+frac_tb<-read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
+                        remove_rowempty = T)
+if(any(grepl("parent",tolower(colnames(frac_tb))))) {
+  iso_tb<-extract_col_isotopologues(frac_tb,
     iso_suffix_sep = "_")
   frac_tb<-calculate_FC(iso_tb)
 } else {
-  frac_tb<-read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
-                          remove_rowempty = T)
   iso_tb<-NULL
 }
 
@@ -346,9 +345,10 @@ if (length(compounds)<length(colnames(abund_tb)[2:ncol(abund_tb)])) {
 }
 
 #merge all input into one table, get compounds and factor orders
+debug(merge_input)
 tb<-merge_input(meta_tb = meta_formatted_tb,abund_tb = abund_tb,frac_tb = frac_tb,
                 compounds=compounds, sample_col = sample_column,
-                iso_tb=iso_tb)
+                iso_tb=iso_tb,summarize_isos = F)
 
 compounds_updated<-colnames(tb)[which(!colnames(tb)%in%
                                         c("Sample","datatype",colnames(meta_formatted_tb)))]
@@ -362,6 +362,7 @@ for (i in 1:length(factor_column)) {
 }
 
 #generate figures per compound with specified settings and save if requested
+debug(prepare_slicedata)
 generate_multiple_pies(tb,compounds=compounds_updated,
                        detail_charts=detail_charts,
                        pathway_charts=pathway_charts,
