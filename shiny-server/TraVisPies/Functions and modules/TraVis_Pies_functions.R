@@ -392,7 +392,7 @@ summarize_isotopologue<-function(iso_tb,sample_colname="Sample"){
 }
 
 merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
-                          sample_col="Sample",compounds) {
+                          sample_col="Sample",compounds,summarize_isos=T) {
   #Per compound adapt FC's below 0 (artefacts due to natural abundance
   #correction) to be positive to avoid problems with the visualisations
   #later on.
@@ -440,9 +440,11 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
       }
     }
 
-    #summarize isotopologue data with name sample column
-    iso_tb<-summarize_isotopologue(iso_tb,sample_colname = sample_col)
-
+    #if desired (needed in travis pies) summarize isotopologue data with name
+    #sample column
+    if (summarize_isos) {
+      iso_tb<-summarize_isotopologue(iso_tb,sample_colname = sample_col)
+    }
   }
   
   #rename sample column in all inputs

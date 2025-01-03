@@ -63,20 +63,20 @@ source(here::here("Functions and modules/TraVis_Pies_functions.R"))
 #can also specify relative to the project folder using the here::here command
 
 #test data 1-factor no replicates
-rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Other examples for nonUI app\Bram problems 2)"
-path<-gsub("\\\\", "/", rawpath)
-# path<-here::here("Example_data/Original input")
-savepath<-path
-metadatafile<-"MD.csv"
-abundancefile<-"RA.csv"
-tracerfile<-"FC.csv"
-mapcoordsfile<-"Pathway figure coords.csv"
-read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-               remove_empty = T)%>%colnames()
-sample_column <-"Samples"
-factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
-norm_column <- "None"   #"None" if not present
-tracer_column <-"None"  
+# rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Other examples for nonUI app\Bram problems 2)"
+# path<-gsub("\\\\", "/", rawpath)
+# # path<-here::here("Example_data/Original input")
+# savepath<-path
+# metadatafile<-"MD.csv"
+# abundancefile<-"RA.csv"
+# tracerfile<-"FC.csv"
+# mapcoordsfile<-"Pathway figure coords.csv"
+# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
+#                remove_empty = T)%>%colnames()
+# sample_column <-"Samples"
+# factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
+# norm_column <- "None"   #"None" if not present
+# tracer_column <-"None"  
 
 #test data 1-factor
 # rawpath<-r"(C:\Users\u0134881\Documents\R\Create figures\Pie charts\Pie charts inputfiles\Pie charts 1factor)"
@@ -95,14 +95,17 @@ tracer_column <-"None"
 # tracer_column <-"None"                #"None" if not present
 
 #test data 1-factor iso input
-# rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Crashes)"
-# path<-gsub("\\\\", "/", rawpath)
-# path<-here::here("Example_data/Original input")
-# savepath<-path
-# metadatafile<-"Input_Example_metadata.csv"
-# abundancefile<-"Input_Example_RA.csv"
-# tracerfile<-"Input_Example_isotopologues.csv"
-# norm_column<-"None"
+rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Crashes)"
+path<-gsub("\\\\", "/", rawpath)
+path<-here::here("Example_data/Original input")
+savepath<-path
+metadatafile<-"Input_Example_metadata.csv"
+abundancefile<-"Input_Example_RA.csv"
+tracerfile<-"Input_Example_isotopologues.csv"
+sample_column <-"Sample"
+factor_column <- "Cohort"   #"None" if not present, or 1 or two element vector
+norm_column <- "None"   #"None" if not present
+tracer_column <-"None"                #"None" if not present
 # (meta_tb<-read_csv_clean(paste0(path,"/",metadatafile),remove_empty = T,
 #                          remove_rowempty = T))
 # sample_column<-colnames(meta_tb)[1]
@@ -303,11 +306,6 @@ if(grepl("iso",tracerfile)) {
   frac_tb<-read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
                           remove_rowempty = T)
   iso_tb<-NULL
-  merged<-merge_input(meta_tb = meta_formatted_tb,
-                      abund_tb = abund_tb,
-                      frac_tb = frac_tb,
-                      sample_col = sample_column,
-                      compounds = compounds)
 }
 
 #make sure FCposition is set to slice when multiple tracer nutrients
