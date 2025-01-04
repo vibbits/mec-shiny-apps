@@ -81,9 +81,35 @@ has_data <- function(x) { sum(!is.na(x)) > 0 }
 # function for checking if any column cell is different from 0
 has_nonzero <- function(x) { any(x != 0)}         
 
-# function for loading and cleaning abundance and FC files
+#replaces all occurences of a character in a string except last.
+#Useful to make sure compound names match between isotopologue data and other types
+replace_except_last <- function(input_strings, to_replace = "_", replacement = " ") {
+  # Function to handle a single string
+  replace_single_string <- function(input_string) {
+    # Find all positions of the character to replace
+    positions <- gregexpr(to_replace, input_string, fixed = TRUE)[[1]]
+    
+    # If there is only one or no occurrences, return the string as is
+    if (length(positions) <= 1) {
+      return(input_string)
+    }
+    
+    # Replace all occurrences except the last one with the replacement character
+    for (i in seq_along(positions)[-length(positions)]) {
+      substr(input_string, positions[i], positions[i]) <- replacement
+    }
+    
+    return(input_string)
+  }
+  
+  # Apply the function to each string in the vector
+  sapply(input_strings, replace_single_string)
+}
+
+# function for loading and cleaning measurement data
 read_csv_clean<- function(file,remove_empty=FALSE,perc_to_num=T,
-                          remove_rowempty=FALSE){
+                          remove_rowempty=FALSE,
+                          clean_underscores=T){
   input_tb<-vroom::vroom(file = file, delim = ",",show_col_types = FALSE)
     
   #drop empty columns and rows if desired
@@ -103,7 +129,6 @@ read_csv_clean<- function(file,remove_empty=FALSE,perc_to_num=T,
     input_tb<-mutate(input_tb,across(all_of(percolumns),function(x) 
       as.numeric(sub(pattern="%", replacement = "",x,fixed = T))/100))
   }
-  
   return(input_tb)
 }
 
@@ -140,15 +165,15 @@ check_iso_input<-function(tb){
 
 
 #function to prepare metadata to uniform format
-format_metadata<-function(meta_tb,sample_column,factor_column,norm_column=NULL,
+format_metadata<-function(meta_tb,sample_column,factor_columns,norm_column=NULL,
                           tracer_column="Labeling") {
   sample_symbol<-rlang::sym(sample_column)
   tracer_symbol<-rlang::sym(tracer_column)
   
-  if (length(factor_column)<2) {
-    fact_symbol<-rlang::sym(factor_column)
-  } else if (length(factor_column)==2){
-    fact_symbol<-rlang::syms(factor_column)
+  if (length(factor_columns)<2) {
+    fact_symbol<-rlang::sym(factor_columns)
+  } else if (length(factor_columns)==2){
+    fact_symbol<-rlang::syms(factor_columns)
   } else {
     stop("At most 2 factor variables can be specified in TraVis Pies")
   }
@@ -175,10 +200,10 @@ format_metadata<-function(meta_tb,sample_column,factor_column,norm_column=NULL,
   }
   
   #check factor column, add dummy if no factors given
-  if (factor_column[1]=="None" ) {
+  if (factor_columns[1]=="None" ) {
     meta_tb$Cohort<-"SingleCohort"
-    factor_column<-"Cohort"
-    fact_symbol<-rlang::sym(factor_column)
+    factor_columns<-"Cohort"
+    fact_symbol<-rlang::sym(factor_columns)
   }
   
   #Order columns, drop all unrequired columns and set type
@@ -186,14 +211,14 @@ format_metadata<-function(meta_tb,sample_column,factor_column,norm_column=NULL,
   #best use := to use !! demasking environmental variable as name 
   #(as_factor might also work but I had issues and dropped it)
   #drop normalisation column if dummy
-  if (length(factor_column)==2){
+  if (length(factor_columns)==2){
     meta_tb<-transmute(meta_tb,
                        !!sample_symbol := as.character(pull(meta_tb,
                                                             sample_column)),
                        !!fact_symbol[[1]] := as.character(pull(meta_tb,
-                                                             factor_column[1])),
+                                                             factor_columns[1])),
                        !!fact_symbol[[2]] := as.character(pull(meta_tb,
-                                                             factor_column[2])),
+                                                             factor_columns[2])),
                        Normalisation=as.numeric(Normalisation),
                        !!tracer_symbol := as.character(pull(meta_tb,
                                                             tracer_column)))
@@ -201,7 +226,7 @@ format_metadata<-function(meta_tb,sample_column,factor_column,norm_column=NULL,
     meta_tb<-transmute(meta_tb,
                        !!sample_symbol := as.character(pull(meta_tb,
                                                             sample_column)),
-                       !!fact_symbol := as.character(pull(meta_tb,factor_column)),
+                       !!fact_symbol := as.character(pull(meta_tb,factor_columns)),
                        Normalisation=as.numeric(Normalisation),
                        !!tracer_symbol := as.character(pull(meta_tb,
                                                             tracer_column)))
@@ -263,7 +288,16 @@ extract_col_isotopologues<-function(iso_col_tb,iso_suffix_sep="_") {
     group_by(Metabolite) %>%
     #n() gives the current group size
     mutate(Isotopologue=seq(from=0,to=n()-1,by=1)) %>%
-    ungroup()
+    ungroup()%>%
+  
+  #if desired (needed in travis pies) summarize isotopologue data with name
+  #sample column, otherwise make row per sample isotopologue combo with
+  #isotopologue_isotopologueNR as datatype
+    # mutate(datatype=paste0("Isotopologue_",as.character(Isotopologue))) %>%
+    select(Metabolite,everything()) %>%
+    pivot_longer(3:ncol(.),names_to = "Sample",values_to = "value") %>%
+    # pivot_wider(names_from = Metabolite,values_from = value)%>%
+    select(Sample,everything())
 }
 
 #Extract abundance data in columns from Escher-Trace like corrected isotopologue
@@ -311,11 +345,16 @@ extract_et_isotopologues<-function(iso_et_tb){
 #Calculates a columnwise FC table based on an extracted isotopologue table
 #can specify sample column name
 calculate_FC<-function(iso_tb,sample_colname="Sample"){
+  sample_symbol<-rlang::sym(sample_colname)
+  
   #calculate FC table, then reformat to columnwise format
-  iso_tb %>% group_by(Metabolite) %>%
-    summarise(across(!Isotopologue,
-                     .fns = ~ sum(.x*Isotopologue)/max(Isotopologue))) %>%
-    t_tibble(first_colname = sample_colname)
+  iso_tb %>% group_by(Metabolite,!!sample_symbol) %>%
+    summarise(value = sum(value*Isotopologue)/max(Isotopologue))%>%
+    select(!!sample_symbol,everything())%>%
+    pivot_wider(names_from = Metabolite,values_from = value)
+    
+  # %>%
+  #   t_tibble(first_colname = sample_colname)
 }
 
 #Function to check samples across meta, abundance and FC tibbles and check
@@ -420,21 +459,8 @@ check_samples_compounds<-function(meta_tb,abund_tb,frac_tb,sample_column,
   return(outlist)
 }
 
-#Summarize extracted isotopologue data as a single row per sample 
-#containing for each metabolite a string with all contributions from lowest to 
-#highest isotopologue in order separated by |
-summarize_isotopologue<-function(iso_tb,sample_colname="Sample",){
-  #remove isotopologue column, group per metabolite and generate single string
-  #per metabolite for each sample
-  #then transpose from rowwise to columnwise representation
-  iso_tb %>% select(-Isotopologue) %>%
-    group_by(Metabolite) %>%
-    summarize(across(everything(),.fns = ~ paste0(.x,collapse = "|"))) %>%
-    t_tibble(first_colname = sample_colname)
-}
-
 merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
-                      sample_col="Sample",compounds,summarize_isos=T) {
+                                      sample_col="Sample",compounds) {
   #Per compound adapt FC's below 0 (artefacts due to natural abundance
   #correction) to be positive to avoid problems with the visualisations
   #later on.
@@ -442,12 +468,15 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
     if (any(frac_tb[,i]<0)) {
       FCs<-pull(frac_tb[,i])
       FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)]) 
-            frac_tb[,i]<-FCs    
+      frac_tb[,i]<-FCs    
     }
   }
   
   #modify iso_tb if it exists before summarizing
   if (length(iso_tb)>0) {
+    iso_tb<-iso_tb %>%
+      pivot_wider(names_from = any_of(sample_col),values_from = value)
+      
     #Per compound adapt isotopologues's below 0 (artefacts due to natural abundance 
     #correction) to be positive to avoid problems with the visualisations
     #later on
@@ -482,21 +511,6 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
         
       }
     }
-    
-    #if desired (needed in travis pies) summarize isotopologue data with name
-    #sample column, otherwise make row per sample isotopologue combo with
-    #isotopologue_isotopologueNR as datatype
-    if (summarize_isos) {
-      iso_tb<-summarize_isotopologue(iso_tb,sample_colname = sample_col)
-    } else {
-      iso_tb<-iso_tb %>% 
-        mutate(datatype=paste0("Isotopologue_",as.character(Isotopologue))) %>%
-        select(Metabolite,datatype,everything(),-Isotopologue) %>%
-        pivot_longer(3:ncol(.),names_to = "Sample",values_to = "value") %>%
-        pivot_wider(names_from = Metabolite,values_from = value)%>%
-        select(Sample,everything())%>%
-        mutate(across(any_of(compounds),as.character))
-    }
   }
   
   #rename sample column in all inputs
@@ -515,7 +529,12 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
     select(1:ncol(meta_tb),any_of(colnames(abund_tb))) 
   
   if(!length(iso_tb)==0) {
-    iso_tb<-left_join(iso_tb,meta_tb,by="Sample") %>%
+    iso_tb<-iso_tb%>%
+      pivot_longer(3:ncol(.),names_to = "Sample",values_to = "value")%>%
+      pivot_wider(names_from = Metabolite,values_from = value)%>%
+      left_join(meta_tb,by="Sample") %>%
+      mutate(datatype=paste0("Isotopologue_",as.character(Isotopologue)),
+             across(any_of(colnames(abund_tb)),as.character)) %>%
       select(any_of(colnames(meta_tb)),datatype,any_of(colnames(abund_tb)))%>%
       filter(Sample %in% meta_tb$Sample)
   }
@@ -537,7 +556,7 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
     }
   }
   
-
+  
   #prepare abundance data for joining: 
   #calculate normalized abundances if normalization column provided and add
   #to abund tb as different datatype. 
@@ -559,14 +578,11 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
   #Add isotopologue data to fractional contribution data
   frac_tb <-frac_tb %>% mutate(across(any_of(compounds),as.character)) %>%
     add_column(datatype="FracCont")
-
+  
   if(!length(iso_tb)==0) {
     # iso_tb$datatype<-"Isotopologues"
     frac_tb<-full_join(frac_tb,iso_tb,by=colnames(frac_tb))
   }
-
-  tb<-full_join(frac_tb,abund_tb,by=colnames(abund_tb))
-
   
   #join all tables then order and put in long format
   #remove normalisation factor if present
@@ -574,34 +590,30 @@ merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
     select(colnames(meta_tb),datatype,everything())%>%
     pivot_longer(-c(any_of(colnames(meta_tb)),datatype),names_to = "compound",
                  values_to = "value")%>%
-    na_omit()
+    na.omit()
+    
+    if (any("Normalisation" %in% colnames(meta_tb))) {
+      tb<-select(tb,-Normalisation) 
+    }
   
-  if ("Normalisation" %in% colnames(meta_tb)) {
-    tb<-select(tb,-Normalisation) 
-  }
-
   return(tb)
-}
-  
+}  
 
-#Extract data for one compound in merged input, only for desired factor
-#levels and set factor order
+#Select only desired columns and filter only supported datatypes.
+#Extract data only for desired factor levels and set factor order
 #need to use !! for dynamic variable names in tidyverse selection
 #see https://stackoverflow.com/questions/50537164/summarizing-by-dynamic-column-name-in-dplyr 
-obtain_compounddata<-function(tb,selected_compound,fact_name,tracer_column,
-                              fact_order=unique(pull(tb,!!fact_name)),
-                              normalize=F){
+prepare_piedata<-function(tb,factor_columns,tracer_column,
+                              fact_order=unique(pull(tb,!!factor_columns))){
   #prepare factor name symbol to use as target column name for mutate
   #select only one compound, filter to include normalized or non normalized
   # abundances
-  fact_symbol<-rlang::syms(fact_name)
+  fact_symbol<-rlang::syms(factor_columns)
   tracer_symbol<-rlang::sym(tracer_column)
-  compound_tb<-tb %>% select(!!fact_name,datatype,compound,value,
+  compound_tb<-tb %>% select(Sample,!!factor_columns,datatype,compound,value,
                              !!tracer_symbol) %>%
-    filter(datatype %in% c("FracCont","Isotopologues",
-                           if_else(normalize,"NormAbund","Abund")),
-           compound==selected_compound)%>%
-    select(-compound)
+    filter(datatype %in% c("FracCont","NormAbund","Abund") |
+             grepl("iso",tolower(datatype),fixed = T))
   
   for(i in 1:length(fact_symbol)) {
     # select only given factor levels, then drops unused levels
@@ -610,66 +622,17 @@ obtain_compounddata<-function(tb,selected_compound,fact_name,tracer_column,
       droplevels() %>%
       
       #Change factor variable from text into actual factor for visualisation and
-      #significance testing. Set datatype to Abund if normalized 
-      #abundances were used, then arrange data order to match the factor levels
+      #significance testing, then arrange data order to match the factor levels
       mutate(!!fact_symbol[[i]]:=factor(!!fact_symbol[[i]],
-                                        levels = fact_order[[i]]),
-             datatype=if_else(datatype=="NormAbund","Abund",datatype)) %>%
+                                        levels = fact_order[[i]]))%>%
       arrange(!!fact_symbol[[i]])
   }
   return(compound_tb)
 }
 
-#this function parses an isotopologue pattern string entry in a standardized
-#TraVis file tomultiple rows each containing the contribution of one isotopologue
-parse_isos_torow<-function(tb,valuecolumn) {
-  #Separate isotopologue string entries from other entries
-  isostring_tb<-filter(tb,datatype=="Isotopologues")
-  out_tb<-filter(tb,!datatype=="Isotopologues")
-  
-  #for each isotopologue string entry, parse to one per isotopologue
-  #add that to the output tibble
-  for (i in 1:nrow(isostring_tb)) {
-    iso_string<-pull(isostring_tb[i,valuecolumn])
-    isos<-unlist(strsplit(iso_string,split = "|",fixed=T))
-    iso_labels<-paste0("M",seq(0,length(isos)-1,1))
-    iso_tb<-tibble(datatype=iso_labels,!!valuecolumn:=isos)%>%
-      add_column()
-    
-    iso_tb<-isostring_tb %>% 
-      slice(rep(i,length(isos))) %>%
-      select(-datatype,-!!valuecolumn) %>%
-      #use by=character() to cross join tibbles with no common column
-      add_column(datatype=iso_labels,!!valuecolumn:=isos)
-    out_tb<-bind_rows(out_tb,iso_tb)
-  }
-  
-  return(out_tb)
-}
-
 #calculate P value comparing
-summarize_addP<-function(tb,cohortcolumn,valuecolumn,
-                         data_type=c("checkColumn","Abundance","FracCont",
-                                     "Isotopologue")){
-  #prepare cohort factor symbol to use for ordering
-  fact_symbol<-rlang::sym(cohortcolumn)
-  
-  #if datatype is provided in column, sort tb per datatype to make sure order is
-  # ok for rest of function. Otherwise, check if datatype provided as variable,
-  # and add column with only that type.
-  #If so, set to that datatype, if not, error.
-  if (data_type=="checkColumn"){
-    if ("datatype" %in% colnames(tb)) {
-      tb<-tb[order(tb$datatype),]
-    } else {
-      print(paste0("summarize_P function requested to check for datatype in ",
-                   "tibble column called 'datatype' (default option), but no such column ",
-                   "provided. Either provide column name or specify datatype in function",
-                   "call"))
-    }
-  } else {
-    tb$datatype<-data_type
-  } 
+summarize_calcP<-function(valuecolumn){
+  #todo how to compare for all cohorts?
   
   #initialize tibble for output with one entry per factor level each for all
   #datatypes, with initialized column for p values, and an index noting
@@ -741,7 +704,7 @@ summarize_addP<-function(tb,cohortcolumn,valuecolumn,
 
 #add fractional contribution labels and positions to pie table with requested
 #formatting. 
-add_FClabels<-function(slice_tb,label_decimals,percent_add,fact_name,
+add_FClabels<-function(slice_tb,label_decimals,percent_add,factor_columns,
                        tracer_column,FC_position,min_lab_dist){
   tracer_symbol <- rlang::sym(tracer_column)
   
@@ -758,7 +721,7 @@ add_FClabels<-function(slice_tb,label_decimals,percent_add,fact_name,
                                !!tracer_symbol=="Unlabeled","",labFC),
            labFC=if_else(Abund==0,"ND",labFC)
            )%>%
-    group_by(!!!rlang::syms(fact_name)) %>%
+    group_by(!!!rlang::syms(factor_columns)) %>%
     
     #get labeling positions on FC and abundance axes. Depends if in
     #center or in slice. Center if not detected (label ND)
@@ -782,10 +745,10 @@ add_FClabels<-function(slice_tb,label_decimals,percent_add,fact_name,
 #then adds the P values calculated of each tracer per 
 #combination of tracer and cohort factors
 #drop grouping structure afterwards to avoid unexpected issues in the future
-summarize_compounddata_old<-function(compound_tb,compound,fact_name,tracer_column){
+summarize_compounddata_old<-function(compound_tb,compound,factor_columns,tracer_column){
   #factors and compounds need to be symbolized to use in 
   #tidyverse grouping function
-  fact_symbols<-rlang::syms(fact_name) #list of symbols if multiple names
+  fact_symbols<-rlang::syms(factor_columns) #list of symbols if multiple names
   comp_symbol<- rlang::sym(compound) #one symbol
   tracer_symbol<-rlang::sym(tracer_column) #one symbol
   
@@ -800,24 +763,24 @@ summarize_compounddata_old<-function(compound_tb,compound,fact_name,tracer_colum
   #Calculates p values of significance tests of both relative abundance, and
   #fractional contribution for each tracer per combination of tracer and cohort 
   #factors. Then joins to means and move P column to end
-  tb_withP<-compound_tb %>% select(!!tracer_symbol,!!fact_name,datatype,
+  tb_withP<-compound_tb %>% select(!!tracer_symbol,!!factor_columns,datatype,
                                    any_of(!!compound))
-  if (length(fact_name)==2){
-    tb_withP<-group_by(tb_withP,!!tracer_symbol,!!!rlang::syms(fact_name[2]))
-  } else if (length(fact_name)==1){
+  if (length(factor_columns)==2){
+    tb_withP<-group_by(tb_withP,!!tracer_symbol,!!!rlang::syms(factor_columns[2]))
+  } else if (length(factor_columns)==1){
     tb_withP<-group_by(tb_withP,!!tracer_symbol)
   }
-  tb_withP<-group_modify(tb_withP,~summarize_addP(.x,cohortcolumn = fact_name[1],
+  tb_withP<-group_modify(tb_withP,~summarize_addP(.x,cohortcolumn = factor_columns[1],
                                                   valuecolumn = compound,data_type = "checkColumn"))%>%
     ungroup()%>%
     right_join(sum_tb)%>%
     relocate(P, .after = last_col())
 }
-summarize_compounddata<-function(compound_tb,fact_name,tracer_column){
+summarize_piedata<-function(prepared_tb,factor_columns,tracer_column){
+  
   #factors and compounds need to be symbolized to use in 
   #tidyverse grouping function
-  fact_symbols<-rlang::syms(fact_name) #list of symbols if multiple names
-  # comp_symbol<- rlang::sym(compound) #one symbol
+  fact_symbols<-rlang::syms(factor_columns) #list of symbols if multiple names
   tracer_symbol<-rlang::sym(tracer_column) #one symbol
   
   #get mean abundance and fractional contribution of each tracer per 
@@ -825,19 +788,21 @@ summarize_compounddata<-function(compound_tb,fact_name,tracer_column){
   #need to use !! for dynamic variable names from one symbol and to 
   #use !!!  to symbolize list of symbols for group/summarise strings
   #see https://stackoverflow.com/questions/50537164/summarizing-by-dynamic-column-name-in-dplyr
-  sum_tb<-group_by(compound_tb,!!tracer_symbol,!!! fact_symbols,datatype)%>%
+  sum_tb<-group_by(prepared_tb,!!tracer_symbol,!!! fact_symbols,datatype)%>%
     summarise(value := mean(value),.groups = "drop")
   
   #Calculates p values of significance tests of both relative abundance, and
   #fractional contribution for each tracer per combination of tracer and cohort 
   #factors. Then joins to means and move P column to end
-  tb_withP<-compound_tb %>% select(!!tracer_symbol,!!fact_name,datatype,value)
-  if (length(fact_name)==2){
-    tb_withP<-group_by(tb_withP,!!tracer_symbol,!!!rlang::syms(fact_name[2]))
-  } else if (length(fact_name)==1){
+  tb_withP<-prepared_tb %>% select(!!tracer_symbol,!!factor_columns,datatype,value)
+  if (length(factor_columns)==2){
+    # tb_withP<-group_by(tb_withP,!!tracer_symbol,!!!rlang::syms(factor_columns[2]))
+    tb_withP<-group_by(tb_withP,!!tracer_symbol,!!!fact_symbols)
+    
+  } else if (length(factor_columns)==1){
     tb_withP<-group_by(tb_withP,!!tracer_symbol)
   }
-  tb_withP<-group_modify(tb_withP,~summarize_addP(.x,cohortcolumn = fact_name[1],
+  tb_withP<-group_modify(tb_withP,~summarize_addP(.x,cohortcolumn = factor_columns[1],
                                                   valuecolumn = value,
                                                   data_type = "checkColumn"))%>%
     ungroup()%>%
@@ -848,7 +813,7 @@ summarize_compounddata<-function(compound_tb,fact_name,tracer_column){
 #todo remove useless compound references everywhere as column is now "value"
 # also comp_symbol
 #add average unlabeled FC to summarized table with labeled FC's
-corFC_addUnlab<-function(sum_tb_FC,fact_name,tracer_column){
+corFC_addUnlab<-function(sum_tb_FC,factor_columns,tracer_column){
   #tidyverse grouping function
   tracer_symbol<-rlang::sym(tracer_column)
   nutrient_symbols<-rlang::syms(unique(pull(sum_tb_FC[,tracer_column])))
@@ -869,7 +834,7 @@ corFC_addUnlab<-function(sum_tb_FC,fact_name,tracer_column){
     pivot_longer(c(!!!nutrient_symbols,Unlabeled),names_to = tracer_column,
                  values_to = value)%>%
     left_join(select(sum_tb_FC,!c(value,datatype)),
-              by=c(fact_name,tracer_column))%>%
+              by=c(factor_columns,tracer_column))%>%
     
     #todo test if below works for isotopologue data
     mutate(datatype=if_else(is.na(datatype),"FracCont",datatype))%>%
@@ -887,20 +852,20 @@ corFC_addUnlab<-function(sum_tb_FC,fact_name,tracer_column){
 #labeled and unlabeled fraction correspond to the desired slices of a pie with
 #this radius. P values for relative abundance and fractional contribution
 #are calculated and a label for these on the pie chart is generated
-prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
+prepare_slicedata<-function(compound_tb,compound,factor_columns,tracer_column,
                             label_decimals,percent_add,FC_position,min_lab_dist,
                             P_isotopologues){
   #factors and compounds need to be symbolized to use in 
   #tidyverse grouping function
-  fact_symbols<-rlang::syms(fact_name) #list of symbols if multiple names
+  fact_symbols<-rlang::syms(factor_columns) #list of symbols if multiple names
   # comp_symbol<- rlang::sym(compound) #one symbol
   tracer_symbol<-rlang::sym(tracer_column) #one symbol
   
   #Calculates p values of significance tests of both relative abundance, and
   #fractional contribution per cohort factor level per tracer.
-  P_tb<-compound_tb %>% select(!!fact_name,datatype,value,
+  P_tb<-compound_tb %>% select(!!factor_columns,datatype,value,
                                !!tracer_column)%>%
-    summarize_addP(cohortcolumn = fact_name,valuecolumn = value,
+    summarize_addP(cohortcolumn = factor_columns,valuecolumn = value,
                    data_type = "checkColumn")%>%
     pivot_wider(names_from=datatype,values_from=P) 
   
@@ -912,13 +877,13 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
   #that is labeled, the part that is unlabeled, and finally the fractional 
   #contribution of the unlabeled part. Format as table with two entries
   #factor level, one for the labeled part and one for the unlabeled part
-  sum_tb_FC<-summarize_compounddata(compound_tb,fact_name = fact_name,
+  sum_tb_FC<-summarize_compounddata(compound_tb,factor_columns = factor_columns,
                                     tracer_column=tracer_column)%>%
-    corFC_addUnlab(fact_name = fact_name,
+    corFC_addUnlab(factor_columns = factor_columns,
                       tracer_column=tracer_column)%>%
     full_join(summarize_compounddata(
       filter(compound_tb,!datatype %in% c("FracCont","Abund")),
-      fact_name = fact_name,tracer_column=tracer_column))%>%
+      factor_columns = factor_columns,tracer_column=tracer_column))%>%
     rename(FracCont=compound,P.FC=P) %>% 
     
     #set labeling as factor
@@ -944,7 +909,7 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
   #Add FC labels and their positions, make P label and add P label radius 
   #positions, set informative P label names
   slice_tb<-add_FClabels(sum_tb,label_decimals=label_decimals,
-                         percent_add=percent_add,fact_name = fact_name,
+                         percent_add=percent_add,factor_columns = factor_columns,
                          FC_position=FC_position,min_lab_dist=min_lab_dist)%>%
     rowwise()%>%
     mutate(
@@ -966,20 +931,20 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
   if (P_isotopologues) {
     #make variable to store factor levels that have significant isotopologue
     #difference
-    levels_orig<-levels(pull(slice_tb[,fact_name]))
+    levels_orig<-levels(pull(slice_tb[,factor_columns]))
     iso_cols<-colnames(slice_tb)[which(substr(colnames(slice_tb),1,2)=="pM")]
     for (i in levels_orig) {
       #get P's of isotopologues from first entry, 
       #check if any significant, add 1 to vector to avoid warnings
       iso_Ps<-unlist(slice_tb[
-        which(slice_tb[,fact_name]==i & slice_tb$Labeling=="Unlabeled"),
+        which(slice_tb[,factor_columns]==i & slice_tb$Labeling=="Unlabeled"),
         iso_cols],use.names = F)
       
       #add * to level name if significant
       if (min(c(iso_Ps,1),na.rm = T)<0.05) {
         newname<-paste0(i,"*")
         slice_tb<-slice_tb %>%
-          mutate(!!fact_name:=recode(!!fact_symbol,!!i := newname))
+          mutate(!!factor_columns:=recode(!!fact_symbol,!!i := newname))
       }
     }
   }
@@ -989,7 +954,7 @@ prepare_slicedata<-function(compound_tb,compound,fact_name,tracer_column,
 
 #makes pie chart based on table with required data per pie slice
 make_piechart<-function(slice_tb,compound,tracer_column=tracer_column,
-                        fact_name=fact_name,log_abund=F,
+                        factor_columns=factor_columns,log_abund=F,
                         circlelinecolor="gray",maxcol_facet=4,
                         circlelinetypes=c(1,1,1,1),
                         include_name=F,col_labeling=c("#bfbfbf","#ffd966"),
@@ -1101,12 +1066,12 @@ if (length(unique(pull(slice_tb[,tracer_column])))>2) {
 
    #transform bar to pie chart and plot pies on grid, depending on amount of 
   #factors.
-  if(length(fact_name)!=2) {
+  if(length(factor_columns)!=2) {
     piebasic<-plotrect+
-      facet_wrap(vars(!!rlang::sym(fact_name)),ncol=maxcol_facet) +
+      facet_wrap(vars(!!rlang::sym(factor_columns)),ncol=maxcol_facet) +
       coord_polar("y", start = 0, direction = 1)
   } else {
-    gridformula<-as.formula(paste0(fact_name[2],"~",fact_name[1]))
+    gridformula<-as.formula(paste0(factor_columns[2],"~",factor_columns[1]))
     #switch="both" to set labels to same side as axis titles
     piebasic<-plotrect+
       facet_grid(gridformula,switch="both") +   
@@ -1140,8 +1105,122 @@ if (length(unique(pull(slice_tb[,tracer_column])))>2) {
   return(pies)
 }
 
-generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
-                       normalize=T,fact_name,tracer_column,fact_order,label_decimals,
+make_slicetb<-function(tb,detail_charts,pathway_charts,savepath,
+                       normalize=T,factor_columns,tracer_column,fact_order,label_decimals,
+                       percent_add,FC_position,min_lab_dist,P_isotopologues,
+                       log_abund,circlelinecolor,circlelinetypes,
+                       maxcol_facet,include_name,col_labeling,
+                       alpha,otherfontsize,
+                       font,legendtitlesize,cohortsize,include_legend,
+                       mapotherfontsize=16,mapcohortsize=18,format="png",
+                       show_P=T) {
+  
+  #Add dummy tracer column called labeling,
+  #if tracer column is missing from dataframe
+  if(!tracer_column %in% colnames(tb)) {
+    tracer_symbol<-rlang::sym(tracer_column)
+    tb<-tb %>%mutate(!!tracer_symbol:="Labeled")
+  }
+  
+  print(paste0("Processing ",compound))
+  
+  #prepare filename, remove problematic characters
+  if (normalize) {
+    plotfilename<-paste0("pies normalized ",compound,".",format)
+  } else {
+    plotfilename<-paste0("pies ",compound,".",format)
+  }
+  plotfilename<-gsub("/","-",plotfilename)
+  
+  #get table with only measured compound data, then a table summarizing
+  #derived means and p values per cohort for abundance and one for fractional
+  #contribution, then put together table with inputformat for pie function
+  print(paste0("extracting compounddata"))
+  
+  compound_tb<-obtain_compounddata(tb,compound,factor_columns = factor_columns,
+                                   tracer_column = tracer_column,
+                                   fact_order = fact_order,
+                                   normalize = normalize)
+  
+  #either remove isotopologues or parse them into one entry per isotopologue
+  #then make sure the value column is numeric for further analysis
+  if (!P_isotopologues) {
+    compound_tb<-filter(compound_tb,!datatype=="Isotopologues") %>%
+      mutate(across(!!compound,as.numeric))
+  } else {
+    compound_tb<-parse_isos_torow(compound_tb,valuecolumn = compound) %>%
+      mutate(across(!!compound,as.numeric))
+  }
+  
+  #make table with summarized data in the right format for pie creation
+  #each entry containing the needed info for one slice of one of the pie 
+  #charts.The average abundance normalized to the largest average abundance 
+  #is the pie radius. The fractions of the above parameter multiplied with the
+  #labeled and unlabeled fraction correspond to the desired slices of a pie 
+  #with this radius 
+  print(paste0("preparing slice data"))
+  
+  slice_tb<-prepare_slicedata(compound_tb,factor_columns = factor_columns,
+                              tracer_column=tracer_column,
+                              compound=compound,label_decimals = label_decimals,
+                              min_lab_dist = min_lab_dist,
+                              percent_add = percent_add,
+                              FC_position = FC_position,
+                              P_isotopologues=P_isotopologues)
+  
+  if (detail_charts) {
+    #plot detailed chart based on information in slice table
+    print(paste0("saving detailed chart"))
+    
+    pies<-make_piechart(slice_tb,factor_columns = factor_columns,
+                        tracer_column = tracer_column,
+                        log_abund=log_abund,
+                        circlelinecolor = circlelinecolor,compound=compound,
+                        circlelinetypes = circlelinetypes,
+                        maxcol_facet = maxcol_facet,
+                        include_name = include_name,col_labeling = col_labeling,
+                        alpha=alpha,font=font,otherfontsize = otherfontsize,
+                        legendtitlesize =legendtitlesize,
+                        cohortsize = cohortsize,include_legend = include_legend,
+                        show_P=show_P)
+    
+    #save detailed pie chart for pathway if required
+    plotfilefolder<-paste0(savepath,"/Pie charts/")
+    plotfilepath<-paste0(plotfilefolder,plotfilename)
+    if (!dir.exists(plotfilefolder)) dir.create(paste0(plotfilefolder),
+                                                recursive = T)
+    ggsave(plotfilepath,pies,width=24.6,height=16,units = "cm",
+           device = format)
+  }
+  
+  if (pathway_charts) {
+    print(paste0("saving pathway chart"))
+    
+    #plot summary pie chart for pathway based on information in slice table
+    pies<-make_piechart(slice_tb,factor_columns = factor_columns,
+                        tracer_column=tracer_column,
+                        log_abund=log_abund,
+                        circlelinecolor = circlelinecolor,compound=compound,
+                        circlelinetypes = circlelinetypes,include_name = F,
+                        maxcol_facet = maxcol_facet,
+                        col_labeling = col_labeling,font=font,alpha=alpha,
+                        otherfontsize = mapotherfontsize,
+                        cohortsize = mapcohortsize,include_legend = F,
+                        show_P=show_P)
+    
+    #save summary pie chart for pathway if required
+    plotfilefolder<-paste0(savepath,"/Pie charts pathway/")
+    plotfilepath<-paste0(plotfilefolder,plotfilename)
+    if (!dir.exists(plotfilefolder)) dir.create(paste0(plotfilefolder),
+                                                recursive = T)
+    ggsave(plotfilepath,pies,width=24.6,height=16,units = "cm",
+           device = format)
+  }
+  
+}
+
+generate_pie_old<-function(tb,compound,detail_charts,pathway_charts,savepath,
+                       normalize=T,factor_columns,tracer_column,fact_order,label_decimals,
                        percent_add,FC_position,min_lab_dist,P_isotopologues,
                        log_abund,circlelinecolor,circlelinetypes,
                        maxcol_facet,include_name,col_labeling,
@@ -1172,7 +1251,7 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
   #contribution, then put together table with inputformat for pie function
   print(paste0("extracting compounddata"))
   
-  compound_tb<-obtain_compounddata(tb,compound,fact_name = fact_name,
+  compound_tb<-obtain_compounddata(tb,compound,factor_columns = factor_columns,
                                      tracer_column = tracer_column,
                                    fact_order = fact_order,
                                    normalize = normalize)
@@ -1195,7 +1274,7 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
   #with this radius 
   print(paste0("preparing slice data"))
   
-  slice_tb<-prepare_slicedata(compound_tb,fact_name = fact_name,
+  slice_tb<-prepare_slicedata(compound_tb,factor_columns = factor_columns,
                                 tracer_column=tracer_column,
                               compound=compound,label_decimals = label_decimals,
                               min_lab_dist = min_lab_dist,
@@ -1207,7 +1286,7 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
     #plot detailed chart based on information in slice table
     print(paste0("saving detailed chart"))
     
-    pies<-make_piechart(slice_tb,fact_name = fact_name,
+    pies<-make_piechart(slice_tb,factor_columns = factor_columns,
                             tracer_column = tracer_column,
                         log_abund=log_abund,
                         circlelinecolor = circlelinecolor,compound=compound,
@@ -1232,7 +1311,7 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
     print(paste0("saving pathway chart"))
     
     #plot summary pie chart for pathway based on information in slice table
-    pies<-make_piechart(slice_tb,fact_name = fact_name,
+    pies<-make_piechart(slice_tb,factor_columns = factor_columns,
                             tracer_column=tracer_column,
                         log_abund=log_abund,
                         circlelinecolor = circlelinecolor,compound=compound,
@@ -1257,7 +1336,7 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
 # Generate pie chart plot for each compound and save if requested
 generate_multiple_pies<-
   function(tb,compounds,detail_charts,pathway_charts,savepath,
-           normalize=T,fact_name,tracer_column,fact_order,label_decimals,percent_add,
+           normalize=T,factor_columns,tracer_column,fact_order,label_decimals,percent_add,
            FC_position,min_lab_dist,P_isotopologues,log_abund,circlelinecolor,
            circlelinetypes,maxcol_facet,include_name,col_labeling,
            alpha,otherfontsize,
@@ -1271,7 +1350,7 @@ generate_multiple_pies<-
                  " of ",length(compounds)))
     generate_pie(tb=tb,compound=compound,detail_charts=detail_charts,
                  pathway_charts=pathway_charts,savepath=savepath,
-                 normalize=normalize,fact_name=fact_name,
+                 normalize=normalize,factor_columns=factor_columns,
                  tracer_column=tracer_column,fact_order=fact_order,
                  label_decimals=label_decimals,percent_add=percent_add,
                  FC_position=FC_position,min_lab_dist=min_lab_dist,
@@ -1459,7 +1538,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 # 
 # # Coenzyme_A
 # v_settings<-list(compound="Coenzyme_A",
-#                  fact_name=colnames(inputtb)[1],
+#                  factor_columns=colnames(inputtb)[1],
 #                  fact_order=pull(unique(inputtb[,1])),
 #                  norm=T,
 #                  percent_add=F,
@@ -1488,7 +1567,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 # compound<-v_settings$compound
 # 
 # comptb_sumiso<-obtain_compounddata(
-#   example_tb,compound=v_settings$compound,fact_name = v_settings$fact_name,
+#   example_tb,compound=v_settings$compound,factor_columns = v_settings$factor_columns,
 #   normalize=v_settings$norm)
 # 
 # comptb<-parse_isos_torow(comptb_sumiso,valuecolumn = v_settings$compound) %>%
@@ -1499,7 +1578,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 # #   comptb[comptb$Cohort=="NT"&!comptb$datatype %in% c("Abund","FracCont"), "Phosphoenolpyruvic_acid"]
 # 
 # 
-# slicetb<-prepare_slicedata(comptb,fact_name = v_settings$fact_name,
+# slicetb<-prepare_slicedata(comptb,factor_columns = v_settings$factor_columns,
 #                       compound=v_settings$compound,
 #                       label_decimals = v_settings$label_decimals,
 #                       min_lab_dist = v_settings$min_lab_dist,
@@ -1508,7 +1587,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 #                       P_isotopologues=v_settings$P_isotopologues)
 # 
 # #makes pie chart based on table with required data per pie slice
-# (test<-make_piechart(slicetb,fact_name = v_settings$fact_name,
+# (test<-make_piechart(slicetb,factor_columns = v_settings$factor_columns,
 #                      log_abund = v_settings$log_abund,
 #                      compound=v_settings$compound,
 #                      circlelinecolor=v_settings$circlelinecolor,
@@ -1543,7 +1622,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 # 
 # generate_pie(example_tb,compound=compound,detail_charts=detail_charts,
 #              pathway_charts=pathway_charts,savepath=target_savepath,
-#              normalize=v_settings$norm,fact_name=v_settings$fact_name,
+#              normalize=v_settings$norm,factor_columns=v_settings$factor_columns,
 #              fact_order=v_settings$fact_order,
 #              P_isotopologues=v_settings$P_isotopologues,
 #              log_abund=v_settings$log_abund,
@@ -1568,7 +1647,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 # generate_multiple_pies(example_tb,compounds=out_settings$compounds,
 #                        detail_charts=detail_charts,
 #                        pathway_charts=pathway_charts,savepath=target_savepath,
-#                        normalize=v_settings$norm,fact_name=v_settings$fact_name,
+#                        normalize=v_settings$norm,factor_columns=v_settings$factor_columns,
 #                        fact_order=v_settings$fact_order,
 #                        P_isotopologues=v_settings$P_isotopologues,
 #                        log_abund=v_settings$log_abund,
@@ -1598,7 +1677,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 #                P_isotopologues = v_settings$P_isotopologue))
 
 #test pie chart function for logscale abundance ratios
-# fact_name<-"Cohort"
+# factor_columns<-"Cohort"
 # circlelinecolor="gray"
 # maxcol_facet=4
 # circlelinetypes=c(2,1,1,1)
@@ -1675,7 +1754,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 # 
 # #transform bar to pie chart and plot pies on grid.
 # piebasic<-plotrect+
-#   facet_wrap(vars(!!rlang::sym(fact_name)),ncol=maxcol_facet) +
+#   facet_wrap(vars(!!rlang::sym(factor_columns)),ncol=maxcol_facet) +
 #   coord_polar("y", start = 0, direction = 1)
 # 
 # 
@@ -1709,47 +1788,208 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 
 
 
+# old discontinued functions ----------------------------------------------
+
+# #Summarize extracted isotopologue data as a single row per sample 
+# #containing for each metabolite a string with all contributions from lowest to 
+# #highest isotopologue in order separated by |
+# summarize_isotopologue<-function(iso_tb,sample_colname="Sample",){
+#   #remove isotopologue column, group per metabolite and generate single string
+#   #per metabolite for each sample
+#   #then transpose from rowwise to columnwise representation
+#   iso_tb %>% select(-Isotopologue) %>%
+#     group_by(Metabolite) %>%
+#     summarize(across(everything(),.fns = ~ paste0(.x,collapse = "|"))) %>%
+#     t_tibble(first_colname = sample_colname)
+# }
+# 
+# merge_input_allow_summarize<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
+#                                       sample_col="Sample",compounds,summarize_isos=F) {
+#   #Per compound adapt FC's below 0 (artefacts due to natural abundance
+#   #correction) to be positive to avoid problems with the visualisations
+#   #later on.
+#   for (i in (2:ncol(frac_tb))) {
+#     if (any(frac_tb[,i]<0)) {
+#       FCs<-pull(frac_tb[,i])
+#       FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)]) 
+#       frac_tb[,i]<-FCs    
+#     }
+#   }
+#   
+#   #modify iso_tb if it exists before summarizing
+#   if (length(iso_tb)>0) {
+#     #Per compound adapt isotopologues's below 0 (artefacts due to natural abundance 
+#     #correction) to be positive to avoid problems with the visualisations
+#     #later on
+#     for (i in (2:nrow(iso_tb))) {
+#       if (any(iso_tb[i,]<0)) {
+#         #check if any value for this isotopologue below 0
+#         metabolite<-iso_tb$Metabolite[i]
+#         isos<-iso_tb[i,-c(1,2)]
+#         negisos<-which(isos<0)
+#         
+#         #if no values negative, skip this section to avoid empty reference  
+#         #warnings and useless computing. If negatives, no zero correction was done
+#         #before and should be done now
+#         if (length(negisos)>0) {
+#           #Make variable containing negative iso value and 0 for others
+#           #then overwrite negative iso values to 0
+#           toadd<-isos
+#           toadd[-negisos]<-0
+#           isos[negisos]<-0   
+#           iso_tb[i,-c(1,2)]<-isos
+#           
+#           #add negative iso values to parent to offset previous addition to 
+#           #parent to compensate negative values
+#           parent_index<-which(iso_tb$Metabolite==metabolite & 
+#                                 iso_tb$Isotopologue==0)
+#           iso_tb[parent_index,-c(1,2)]<-iso_tb[parent_index,-c(1,2)]+toadd
+#           
+#           #if any parents became <0, set to 0 (likely parent was undetectable)
+#           iso_tb[parent_index,][which(iso_tb[parent_index,]<0&
+#                                         is.numeric(iso_tb[parent_index,]))]<-0
+#         }
+#         
+#       }
+#     }
+#     
+#     #if desired (needed in travis pies) summarize isotopologue data with name
+#     #sample column, otherwise make row per sample isotopologue combo with
+#     #isotopologue_isotopologueNR as datatype
+#     if (summarize_isos) {
+#       iso_tb<-summarize_isotopologue(iso_tb,sample_colname = sample_col)
+#     } else {
+#       iso_tb<-iso_tb %>% 
+#         mutate(datatype=paste0("Isotopologue_",as.character(Isotopologue))) %>%
+#         select(Metabolite,datatype,everything(),-Isotopologue) %>%
+#         pivot_longer(3:ncol(.),names_to = "Sample",values_to = "value") %>%
+#         pivot_wider(names_from = Metabolite,values_from = value)%>%
+#         select(Sample,everything())%>%
+#         mutate(across(any_of(compounds),as.character))
+#     }
+#   }
+#   
+#   #rename sample column in all inputs
+#   meta_tb<-rename(meta_tb,Sample=all_of(sample_col))
+#   abund_tb<-rename(abund_tb,Sample=all_of(sample_col))
+#   frac_tb<-rename(frac_tb,Sample=all_of(sample_col))
+#   
+#   #add metadata to abundance and fractional contribution data respectively
+#   #retaining only selected samples, and drop metabolites with 0 abundance
+#   #in every sample to avoid errors
+#   abund_tb<-left_join(meta_tb,abund_tb,by="Sample") %>%
+#     select(1:ncol(meta_tb),any_of(compounds)) %>%
+#     select_if(has_nonzero)
+#   
+#   frac_tb<-left_join(meta_tb,frac_tb,by="Sample") %>%
+#     select(1:ncol(meta_tb),any_of(colnames(abund_tb))) 
+#   
+#   if(!length(iso_tb)==0) {
+#     iso_tb<-left_join(iso_tb,meta_tb,by="Sample") %>%
+#       select(any_of(colnames(meta_tb)),datatype,any_of(colnames(abund_tb)))%>%
+#       filter(Sample %in% meta_tb$Sample)
+#   }
+#   
+#   #add fractional contribution and isotopologues equal to 100% unlabeled to 
+#   #compounds in abundance but not fraction labeling table
+#   if (any(!colnames(abund_tb) %in% colnames(frac_tb))) {
+#     nolabnames<-colnames(abund_tb)[which(! colnames(abund_tb) %in%
+#                                            colnames(frac_tb))]
+#     for (i in nolabnames) {
+#       frac_tb$new<-0
+#       colnames(frac_tb)[ncol(frac_tb)]<-i
+#     }
+#     if(!length(iso_tb)==0) {
+#       for (i in nolabnames) {
+#         iso_tb$new<-"1"
+#         colnames(iso_tb)[ncol(iso_tb)]<-i
+#       }
+#     }
+#   }
+#   
+#   
+#   #prepare abundance data for joining: 
+#   #calculate normalized abundances if normalization column provided and add
+#   #to abund tb as different datatype. 
+#   #add as character as isotopologue summaries will be character too
+#   abund_tb <-abund_tb %>% add_column(datatype="Abund")
+#   
+#   if ("Normalisation" %in% colnames(meta_tb)) {
+#     abund_tb<-abund_tb %>% 
+#       mutate(across((ncol(meta_tb)+1):(ncol(abund_tb)-1),
+#                     function(x) x/Normalisation)) %>%
+#       mutate(datatype="NormAbund") %>%
+#       full_join(abund_tb,by=colnames(abund_tb)) %>%
+#       mutate(across(any_of(compounds),as.character)) 
+#   } else {
+#     abund_tb<-abund_tb %>%mutate(across(any_of(compounds),as.character)) 
+#   }
+#   
+#   #prepare labeling  data for joining: 
+#   #Add isotopologue data to fractional contribution data
+#   frac_tb <-frac_tb %>% mutate(across(any_of(compounds),as.character)) %>%
+#     add_column(datatype="FracCont")
+#   
+#   if(!length(iso_tb)==0) {
+#     # iso_tb$datatype<-"Isotopologues"
+#     frac_tb<-full_join(frac_tb,iso_tb,by=colnames(frac_tb))
+#   }
+#   
+#   #join all tables then order and put in long format
+#   #remove normalisation factor if present
+#   tb<-full_join(frac_tb,abund_tb,by=colnames(abund_tb)) %>%
+#     select(colnames(meta_tb),datatype,everything())%>%
+#     pivot_longer(-c(any_of(colnames(meta_tb)),datatype),names_to = "compound",
+#                  values_to = "value")%>%
+#     na_omit()%>%
+#     
+#     if ("Normalisation" %in% colnames(meta_tb)) {
+#       tb<-select(tb,-Normalisation) 
+#     }
+#   
+#   return(tb)
+# }
 #test input merging -----------------------------------------------------------------------
-meta_tb<-read_csv_clean(paste0(getwd(),
-                               "/Example_data/Original input/Input_Example_metadata.csv"),
-                        remove_empty = T,perc_to_num = F)
-# meta_tb[,3]<-1
-abund_tb<-read_csv_clean(paste0(getwd(),
-                                "/Example_data/Original input/Input_Example_RA.csv"),
-                         remove_empty = T,perc_to_num = F)
-iso_et_tb<-read_csv_clean(paste0(getwd(),
-                                 "/Example_data/Original input/Input_Example_RA.csv"),
-                          remove_empty = F,perc_to_num = F)
-iso_col_tb<-read_csv_clean(paste0(getwd(),
-                                  "/Example_data/Original input/Input_Example_isotopologues.csv"),
-                           remove_empty = T,perc_to_num = T)
-iso_tb<-extract_col_isotopologues(iso_col_tb) %>%
-    slice(-c(5,6,7,8))
-
-# iso_tb<-extract_et_isotopologues(iso_et_tb) %>%
-#   slice(-c(5,6,7,8))
-
-# abund_tb<-extract_et_abund(iso_et_tb,sample_colname = "Sample")
-
-frac_tb<-calculate_FC(iso_tb,sample_colname = "Sample")
-
-sample_col<-"Sample"
-
-compounds<-colnames(abund_tb)[-1]
-head(meta_tb)
-(meta_formatted_tb<-format_metadata(meta_tb,sample_column = "Sample",
-                                   factor_column = "Cohort",
-                                   norm_column = "None"))
-
-test<-merge_input(meta_tb = meta_formatted_tb,
-                  abund_tb = abund_tb,
-                  frac_tb = frac_tb,
-                  iso_tb=iso_tb,
-                  sample_col = sample_col,
-                  compounds = compounds)
-
-abund_tb<-abund_tb %>%mutate(across(-c(1:3),as.character)) 
-
-
-
-
+# meta_tb<-read_csv_clean(paste0(getwd(),
+#                                "/Example_data/Original input/Input_Example_metadata.csv"),
+#                         remove_empty = T,perc_to_num = F)
+# # meta_tb[,3]<-1
+# abund_tb<-read_csv_clean(paste0(getwd(),
+#                                 "/Example_data/Original input/Input_Example_RA.csv"),
+#                          remove_empty = T,perc_to_num = F)
+# iso_et_tb<-read_csv_clean(paste0(getwd(),
+#                                  "/Example_data/Original input/Input_Example_RA.csv"),
+#                           remove_empty = F,perc_to_num = F)
+# iso_col_tb<-read_csv_clean(paste0(getwd(),
+#                                   "/Example_data/Original input/Input_Example_isotopologues.csv"),
+#                            remove_empty = T,perc_to_num = T)
+# iso_tb<-extract_col_isotopologues(iso_col_tb) %>%
+#     slice(-c(5,6,7,8))
+# 
+# # iso_tb<-extract_et_isotopologues(iso_et_tb) %>%
+# #   slice(-c(5,6,7,8))
+# 
+# # abund_tb<-extract_et_abund(iso_et_tb,sample_colname = "Sample")
+# 
+# frac_tb<-calculate_FC(iso_tb,sample_colname = "Sample")
+# 
+# sample_col<-"Sample"
+# 
+# compounds<-colnames(abund_tb)[-1]
+# head(meta_tb)
+# (meta_formatted_tb<-format_metadata(meta_tb,sample_column = "Sample",
+#                                    factor_columns = "Cohort",
+#                                    norm_column = "None"))
+# 
+# test<-merge_input(meta_tb = meta_formatted_tb,
+#                   abund_tb = abund_tb,
+#                   frac_tb = frac_tb,
+#                   iso_tb=iso_tb,
+#                   sample_col = sample_col,
+#                   compounds = compounds)
+# 
+# abund_tb<-abund_tb %>%mutate(across(-c(1:3),as.character)) 
+# 
+# 
+# 
+# 

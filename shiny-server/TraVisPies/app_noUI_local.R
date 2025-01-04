@@ -75,7 +75,7 @@ source(here::here("Functions and modules/TraVis_Pies_functions merge isos and mu
 # read_csv_clean(file=paste(path,metadatafile,sep = "/"),
 #                remove_empty = T)%>%colnames()
 # sample_column <-"Samples"
-# factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
+# factor_columns <- "cohort"   #"None" if not present, or 1 or two element vector
 # norm_column <- "None"   #"None" if not present
 # tracer_column <-"None"  
 
@@ -91,7 +91,7 @@ source(here::here("Functions and modules/TraVis_Pies_functions merge isos and mu
 # read_csv_clean(file=paste(path,metadatafile,sep = "/"),
 #                remove_empty = T)%>%colnames()
 # sample_column <-"Sample"
-# factor_column <- "Cohort"   #"None" if not present, or 1 or two element vector
+# factor_columns <- "Cohort"   #"None" if not present, or 1 or two element vector
 # norm_column <- "None"   #"None" if not present
 # tracer_column <-"None"                #"None" if not present
 
@@ -104,17 +104,17 @@ metadatafile<-"Input_Example_metadata.csv"
 abundancefile<-"Input_Example_RA.csv"
 tracerfile<-"Input_Example_isotopologues.csv"
 sample_column <-"Sample"
-factor_column <- "Cohort"   #"None" if not present, or 1 or two element vector
+factor_columns <- "Cohort"   #"None" if not present, or 1 or two element vector
 norm_column <- "None"   #"None" if not present
 tracer_column <-"None"                #"None" if not present
 # (meta_tb<-read_csv_clean(paste0(path,"/",metadatafile),remove_empty = T,
 #                          remove_rowempty = T))
 # sample_column<-colnames(meta_tb)[1]
-# factor_column<-colnames(meta_tb)[2]
+# factor_columns<-colnames(meta_tb)[2]
 # tracer_column <-"None"                #"None" if not present
 # meta_formatted_tb<-format_metadata(meta_tb = meta_tb,
 #                                    sample_column = sample_column,
-#                                    factor_column = factor_column,
+#                                    factor_columns = factor_columns,
 #                                    norm_column = norm_column)
 # 
 # abund_tb<-read_csv_clean(paste0(path,"/",abundancefile),remove_empty = T,
@@ -133,7 +133,7 @@ tracer_column <-"None"                #"None" if not present
 # read_csv_clean(file=paste(path,metadatafile,sep = "/"),
 #                remove_empty = T)%>%colnames()
 # sample_column <-"Sample"
-# factor_column <- c("Time","Condition")   #"None" if not present, or 1 or two element vector
+# factor_columns <- c("Time","Condition")   #"None" if not present, or 1 or two element vector
 # norm_column <- "Normalisation"   #"None" if not present
 # tracer_column <-"None"                #"None" if not present
 
@@ -152,7 +152,7 @@ tracer_column <-"None"                #"None" if not present
 # ,sep = "/"),
 #                remove_empty = T)%>%colnames()
 # sample_column <-"Sample"
-# factor_column <- c("Condition")   #"None" if not present, or 1 or two element vector
+# factor_columns <- c("Condition")   #"None" if not present, or 1 or two element vector
 # norm_column <- "Normalisation"   #"None" if not present
 # tracer_column <-"Tracer"                #"None" if not present
 
@@ -169,7 +169,7 @@ tracer_column <-"None"                #"None" if not present
 # read_csv_clean(file=paste(path,tracerfile,sep = "/"),
 #                remove_empty = T)%>%colnames()
 # sample_column <-"Sample"
-# factor_column <- c("Condition","Supplementation")   #"None" if not present, or 1 or two element vector
+# factor_columns <- c("Condition","Supplementation")   #"None" if not present, or 1 or two element vector
 # norm_column <- "Normalisation"   #"None" if not present
 # tracer_column <-"Tracer"                #"None" if not present
 
@@ -271,10 +271,23 @@ format<-"png"
 
 
 # Code-------------------------------------------------------------------
+#todo merge with code for reading excel files:
+#load result data cleaning all _, except isos which keep last _
+#make sure all have long column as soon as possible, before merging
 #derive settings from input
-if(length(factor_column)==1){
+#to add:
+# 1) how to deal with normalisation if metadata contains a normalisation
+#column => allow user input normalisation factor if any or none
+#  2) how to count isotopologue number to do fractional contribution? Need 
+#unified way to count isotopes (for now only single tracer element)
+
+#make symbols of supplied column names
+factor_symbols<-rlang::syms(factor_columns) #list of symbols if multiple names
+tracer_symbol<-rlang::sym(tracer_column) #one symbol
+
+if(length(factor_columns)==1){
   twofactor=F
-} else if(length(factor_column)==2) {
+} else if(length(factor_columns)==2) {
   twofactor=T
 } else {
   stop("Factor should be set to 'None' if not present, or be a 1 or 2 element vector")
@@ -283,13 +296,14 @@ if(length(factor_column)==1){
 #If no tracer column, make dummy column and set tracer column name to Tracer
 if(tracer_column=="None") {
   tracer_column<-"Labeling"
+  tracer_symbol<-rlang::sym(tracer_column)
 }
 
 #input metadata and abundance data, put in right format for following functions
 meta_formatted_tb<-read_csv_clean(file=paste(path,metadatafile,sep = "/"),
                                   remove_empty = T) %>%
   format_metadata(sample_column = sample_column,
-                  factor_column = factor_column,
+                  factor_columns = factor_columns,
                   norm_column = norm_column,
                   tracer_column=tracer_column)
 
@@ -345,10 +359,10 @@ if (length(compounds)<length(colnames(abund_tb)[2:ncol(abund_tb)])) {
 }
 
 #merge all input into one table, get compounds and factor orders
-debug(merge_input)
+# undebug(merge_input)
 tb<-merge_input(meta_tb = meta_formatted_tb,abund_tb = abund_tb,frac_tb = frac_tb,
                 compounds=compounds, sample_col = sample_column,
-                iso_tb=iso_tb,summarize_isos = F)
+                iso_tb=iso_tb)
 
 compounds_updated<-colnames(tb)[which(!colnames(tb)%in%
                                         c("Sample","datatype",colnames(meta_formatted_tb)))]
@@ -357,18 +371,101 @@ compounds_updated<-colnames(tb)[which(!colnames(tb)%in%
 
 #make list of factor orders per factor to allow multiple factors
 fact_order<-list(NULL)
-for (i in 1:length(factor_column)) {
-  fact_order[[i]]<-unique(pull(tb,!!factor_column[i]))
+for (i in 1:length(factor_columns)) {
+  fact_order[[i]]<-unique(pull(tb,!!factor_columns[i]))
 }
 
+storetb<-tb
+
+
+# from here test code long tb ---------------------------------------------
+
+#todo make functions work on long tibble grouped appropriately, including
+#all compounds at once.
 #generate figures per compound with specified settings and save if requested
-debug(prepare_slicedata)
+# debug(prepare_slicedata)
+
+#make tibble for generating pies
+debug(prepare_piedata)
+tb<-storetb %>%
+  select(-Labeling) %>%
+  
+  #Add dummy tracer column called labeling,if tracer column is missing from 
+  #dataframe, like in pies code
+  {if(tracer_column %in% colnames(.)) . else {
+    mutate(.,!!tracer_symbol:="Labeled") }
+    } %>%
+  
+  #Select only desired columns and filter only supported datatypes.
+  #Extract data only for desired factor levels and set factor order
+  prepare_piedata(factor_columns = factor_columns,
+                  tracer_column = tracer_column,
+                  fact_order = fact_order) %>%
+  
+  #summarize data per combination of compounds, factors, tracer types and data types
+  #for each second factor, make new comparison of P values to first factor level of first factor
+  #todo make sense of factors if multiple => one factor makes the rows in the final table (eg.cohort)
+  #the other the columns (eg.time), comparison always to first in row
+  group_by(compound,!!factor_symbols,!!tracer_symbol,datatype)%>%
+  summarise(value := mean(value),P=summarize_calcP(value),.groups = "drop")
+
+#Calculates p values of significance tests of both relative abundance, and
+#fractional contribution for each tracer per combination of tracer and cohort 
+#factors. Then joins to means and move P column to end
+tb_withP<-prepared_tb %>% select(!!tracer_symbol,!!factor_columns,datatype,value)
+if (length(factor_columns)==2){
+  # tb_withP<-group_by(tb_withP,!!tracer_symbol,!!!rlang::syms(factor_columns[2]))
+  tb_withP<-group_by(tb_withP,!!tracer_symbol,!!!fact_symbols)
+  
+} else if (length(factor_columns)==1){
+  tb_withP<-group_by(tb_withP,!!tracer_symbol)
+}
+tb_withP<-group_modify(tb_withP,~summarize_addP(.x,cohortcolumn = factor_columns[1],
+                                                valuecolumn = value,
+                                                data_type = "checkColumn"))%>%
+  ungroup()%>%
+  right_join(sum_tb)%>%
+  relocate(P, .after = last_col())
+
+#make table with summarized data in the right format for pie creation
+#each entry containing the needed info for one slice of one of the pie 
+#charts.The average abundance normalized to the largest average abundance 
+#is the pie radius. The fractions of the above parameter multiplied with the
+#labeled and unlabeled fraction correspond to the desired slices of a pie 
+#with this radius 
+print(paste0("preparing slice data"))
+
+slice_tb<-prepare_slicedata(compound_tb,factor_columns = factor_columns,
+                            tracer_column=tracer_column,
+                            compound=compound,label_decimals = label_decimals,
+                            min_lab_dist = min_lab_dist,
+                            percent_add = percent_add,
+                            FC_position = FC_position,
+                            P_isotopologues=P_isotopologues)
+
+make_slicetb(tb=tb,compound=compound,detail_charts=detail_charts,
+             pathway_charts=pathway_charts,savepath=savepath,
+             normalize=normalize,factor_columns=factor_columns,
+             tracer_column=tracer_column,fact_order=fact_order,
+             label_decimals=label_decimals,percent_add=percent_add,
+             FC_position=FC_position,min_lab_dist=min_lab_dist,
+             P_isotopologues=P_isotopologues,log_abund=log_abund,
+             circlelinecolor=circlelinecolor,
+             circlelinetypes=circlelinetypes,maxcol_facet=maxcol_facet,
+             include_name=include_name,col_labeling=col_labeling,
+             alpha=alpha,otherfontsize=otherfontsize,
+             font=font,legendtitlesize=legendtitlesize,
+             cohortsize=cohortsize,include_legend=include_legend,
+             mapotherfontsize=mapotherfontsize,mapcohortsize=mapcohortsize,
+             format=format,show_P=show_P)
+
+
 generate_multiple_pies(tb,compounds=compounds_updated,
                        detail_charts=detail_charts,
                        pathway_charts=pathway_charts,
                        savepath=savepath,
                        normalize=normalize,
-                       fact_name=factor_column,
+                       factor_columns=factor_columns,
                        tracer_column=tracer_column,
                        fact_order=fact_order, 
                        P_isotopologues=P_isotopologues,
@@ -418,6 +515,21 @@ generate_multiple_pies(tb,compounds=compounds_updated,
 # 
 # debug(obtain_compounddata)
 # undebug(obtain_compounddata)
+
+
+# code saved for later figures from summarized longtb---------------------------------------------------------------------
+#pick normalized or not
+#prepare filename, remove problematic characters
+if (normalize) {
+  plotfilename<-paste0("pies normalized ",compound,".",format)
+  tb<-tb%>%
+    filter(datatype %in% c("FracCont","Isotopologues","NormAbund"))
+} else {
+  plotfilename<-paste0("pies ",compound,".",format)
+  tb<-tb%>%
+    filter(datatype %in% c("FracCont","Isotopologues","Abund"))
+}
+plotfilename<-gsub("/","-",plotfilename)
 
 
 # Overlay pies on map --------------------------------------------------------
@@ -1020,14 +1132,6 @@ for (compound in compounds) {
   
   if (print_tables) print(slice_tb)
 }
-
-# End ---------------------------------------------------------------------
-cbind(pull(frac_tb[,c(1)]),frac_tb[,c(4)])
-refvalues<-c(1.01,1.01,1.01,1.01)
-tgtvalues<-c(1.01,1.01,0,0)
-kruskal.test(c(refvalues,tgtvalues),
-             c(rep("Reference",length(refvalues)),
-               rep("Target",length(tgtvalues))))$p.value
 
 # Donotuse old Functions and libraries ---------------------------------------------------------------
 #load font library. For windows only it loads these fonts for bitmap output
