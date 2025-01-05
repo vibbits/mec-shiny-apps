@@ -50,13 +50,10 @@ library(dplyr)        #for faster.easier manipulation of data
 library(tibble)       #for manipulating tibbles
 library(readr)        #for writing .csv file of merged output
 library(tidyr)        #for restructuring data tibbles
-library(broom)        #for using regression models in dplyr pipes
-library(rstatix)      #pipe-friendly Kruskal Wallis test
 library(ggplot2)      #for generating the pie chart plots
 
 #load functions to support the app 
-# source(here::here("Functions and modules/TraVis_Pies_functions.R"))
-source(here::here("Functions and modules/TraVis_Pies_functions merge isos and multifactor multitracer.R"))
+source(here::here("Functions and modules/TraVis_Pies_functions.R"))
 
 # User input -------------------------------------------------------------------
 #Data file locations and specifications
@@ -64,8 +61,6 @@ source(here::here("Functions and modules/TraVis_Pies_functions merge isos and mu
 #read in R without having to modify the strings by hand
 #example: rawpath<-r"(C:\User\Projects\Pie charts)"
 #can also specify relative to the project folder using the here::here command
-
-#todo test 2 factor with iso input: the sicrit comparison data!
 
 #test data 1-factor no replicates
 # rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Other examples for nonUI app\Bram problems 2)"
@@ -81,7 +76,7 @@ source(here::here("Functions and modules/TraVis_Pies_functions merge isos and mu
 # sample_column <-"Samples"
 # factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
 # norm_column <- "None"   #"None" if not present
-# tracer_column <-"None"  
+# tracer_column <-"None"
 
 #test data 1-factor
 # rawpath<-r"(C:\Users\u0134881\Documents\R\Create figures\Pie charts\Pie charts inputfiles\Pie charts 1factor)"
@@ -107,17 +102,25 @@ savepath<-path
 metadatafile<-"Input_Example_metadata.csv"
 abundancefile<-"Input_Example_RA.csv"
 tracerfile<-"Input_Example_isotopologues.csv"
-sample_column <-"Sample"
-factor_column <- "Cohort"   #"None" if not present
-comparative_factor_column <- NULL   #NULL if not present, factor on each level of which the first factor is compared
-norm_column <- "None"   #"None" if not present
+norm_column<-"None"
+meta_tb<-read_csv_clean(paste0(path,"/",metadatafile),remove_empty = T)
+sample_column<-colnames(meta_tb)[1]
+factor_column<-colnames(meta_tb)[2]
 tracer_column <-"None"                #"None" if not present
+# meta_formatted_tb<-format_metadata(meta_tb = meta_tb,
+#                                    sample_column = sample_column,
+#                                    factor_column = factor_column,
+#                                    norm_column = norm_column)
+# 
+# abund_tb<-read_csv_clean(paste0(path,"/",abundancefile),remove_empty = T,
+#                          remove_rowempty = T)
+# compounds<-colnames(abund_tb[-which(colnames(abund_tb)==sample_column)])
 
 
 #test data 2-factor
-# rawpath<-r"(D:\Documents\GitHub\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Experimental examples for nonUI app\Pie charts 2factor)"
+# rawpath<-r"(C:\Users\u0134881\Documents\R\Create figures\Pie charts\Pie charts inputfiles\Pie charts 2factor)"
 # path<-gsub("\\\\", "/", rawpath)
-# path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor")
+# path<-here::here("Example_data/Other examples for nonUI app/Pie charts 2factor")
 # savepath<-path
 # metadatafile<-"2factorpies_metadata.csv"
 # abundancefile<-"2factorpies_RA.csv"
@@ -125,8 +128,7 @@ tracer_column <-"None"                #"None" if not present
 # read_csv_clean(file=paste(path,metadatafile,sep = "/"),
 #                remove_empty = T)%>%colnames()
 # sample_column <-"Sample"
-# factor_column <- "Time"   #"None" if not present
-# comparative_factor_column <- "Condition"   #"None" if not present, factor on each level of which the first factor is compared
+# factor_column <- c("Time","Condition")   #"None" if not present, or 1 or two element vector
 # norm_column <- "Normalisation"   #"None" if not present
 # tracer_column <-"None"                #"None" if not present
 
@@ -145,15 +147,14 @@ tracer_column <-"None"                #"None" if not present
 # ,sep = "/"),
 #                remove_empty = T)%>%colnames()
 # sample_column <-"Sample"
-# factor_column <- "Condition"   #"None" if not present
-# comparative_factor_column <- NULL   #NULL if not present, factor on each level of which the first factor is compared
+# factor_column <- c("Condition")   #"None" if not present, or 1 or two element vector
 # norm_column <- "Normalisation"   #"None" if not present
 # tracer_column <-"Tracer"                #"None" if not present
 
 #test data 2-factor different tracers
 # rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
 # path<-gsub("\\\\", "/", rawpath)
-# path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor multitracer")
+# path<-here::here("Example_data/Other examples for nonUI app/Pie charts 2factor multitracer")
 # savepath<-path
 # metadatafile<-"2factor_multitrace_metadata.csv"
 # abundancefile<-"2factor_multitrace_RA.csv"
@@ -163,13 +164,12 @@ tracer_column <-"None"                #"None" if not present
 # read_csv_clean(file=paste(path,tracerfile,sep = "/"),
 #                remove_empty = T)%>%colnames()
 # sample_column <-"Sample"
-# factor_column <- "Condition"   #"None" if not present
-# comparative_factor_column <- "Supplementation"   #"None" if not present, factor on each level of which the first factor is compared
+# factor_column <- c("Condition","Supplementation")   #"None" if not present, or 1 or two element vector
 # norm_column <- "Normalisation"   #"None" if not present
 # tracer_column <-"Tracer"                #"None" if not present
 
 #Miscellaneous
-P_isotopologues<-T                    #leave at false, only input fraction contribution data 
+P_isotopologues<-F                     #leave at false, only input fraction contribution data 
 log_abund<-F
 detail_charts<-T                      #makes images with detail for solo use
 pathway_charts<-F                        #also generate images fit for pathway 
@@ -180,10 +180,23 @@ compounds<-NULL                      #which compounds included; NULL => all
 show_P<-T                              #show P values on pie plots
 compounds<-"Glucose 1,6-bisphosphate"  #TODO:remove
 
+#factors and factor level order
+#fact.invert False makes first factor X factor and second Y for grid, 
+#True is opposite
+#factX.levels and factY.levels can be used to set the factor level order
+#in the pie chart if the order in the input file is not satisfactory.
+#important as the first level will be used as a reference
+
+fact.invert<-F 
+factX.levels<-NULL #only used in two factor analysis. 
+# factX.levels<-c("NT","25mM 2DG", "10uM AMA")                    #character vector with order of factor levels in X factor, set NULL to take order in file
+factY.levels<-NULL                    #character vector with order of factor levels in Y factor, set NULL to take order in file
+# factY.levels<-c("Reference","Treatment1","Treatment2")                    #character vector with order of factor levels in Y factor, set NULL to take order in file
+
 #figure appearance parameters
 #any color input recognized by ggplot2::scale_fill_manual can be used
-col_labeling<-c("#bfbfbf","#ffd966")   #colors for labeled and unlabeled fraction 
-# col_labeling<-c("#bfbfbf","#ffd966","lightblue")   #colors for 2 tracers and unlabeled fraction
+colLabeling<-c("#bfbfbf","#ffd966")   #colors for labeled and unlabeled fraction 
+# colLabeling<-c("#bfbfbf","#ffd966","lightblue")   #colors for 2 tracers and unlabeled fraction
 maxcol_facet<-3                       #maximum amount of images horizontal
 include_name<-T                        #include compound name on figure
 include_legend<-T                      #include legend on figure
@@ -228,15 +241,15 @@ mapcohortsize<-16
 mapotherfontsize<-18
 
 #textlabel fractional contribution parameters
-#FC_position sets where FC should be displayed. "center" to display in center,
+#FCposition sets where FC should be displayed. "center" to display in center,
 #"slice" to display in labeled slice
-#min_lab_dist sets minimal distance at which FC label is plotted. 0 is center
+#minLabDist sets minimal distance at which FC label is plotted. 0 is center
 #1 is the outer circle. If distance would be smaller based on pie abundance,
-#label is plotted at min_lab_dist  distance from the circle center
-FC_position<-"center"  
-min_lab_dist<-0.7                       
-label_decimals<-1                     #amount of decimals in FC label
-percent_add<-T                         #if true adds "%" to the FC label
+#label is plotted at minLabDist  distance from the circle center
+FCposition<-"center"  
+minLabDist<-0.7                       
+labelDecimals<-1                     #amount of decimals in FC label
+percentAdd<-T                         #if true adds "%" to the FC label
 
 #linetypes and colour of concentric circles
 # circlelinetypes<-c(3,4,2,6)  #concentric lines from inside to out dotted, dot dash, dash, doubledash
@@ -253,83 +266,44 @@ format<-"png"
 
 
 # Code-------------------------------------------------------------------
-#todo merge with code for reading excel files:
-#load result data cleaning all _, except isos which keep last _
-#make sure all have long column as soon as possible, before merging
 #derive settings from input
-#to add:
-# 1) how to deal with normalisation if metadata contains a normalisation
-#column => allow user input normalisation factor if any or none
-#  2) how to count isotopologue number to do fractional contribution? Need 
-#unified way to count isotopes (for now only single tracer element)
-
+if(length(factor_column)==1){
+  twofactor=F
+} else if(length(factor_column)==2) {
+  twofactor=T
+} else {
+  stop("Factor should be set to 'None' if not present, or be a 1 or 2 element vector")
+}
 
 #If no tracer column, make dummy column and set tracer column name to Tracer
-#then make symbol for dplyr pipelines
 if(tracer_column=="None") {
   tracer_column<-"Labeling"
-  tracer_symbol<-rlang::sym(tracer_column)
 }
-tracer_symbol<-rlang::sym(tracer_column) #one symbol
-
-#Check how many factors supplied, make dummy if none, keep if one, keep a 
-#variable with both and separate variables if two, error if more than two
-#make symbols for use in dplyr pipelines
-factor_columns <- c(factor_column,comparative_factor_column)
-
-if(length(factor_columns)==1){
-  twofactor=F
-  factor_symbol<-rlang::sym(factor_columns)
-  if (exists("compar_factor_symbol")) rm("compar_factor_symbol")
-} else if(length(factor_columns)==2) {
-  twofactor=T
-  factor_symbol<-rlang::sym(factor_column)
-  compar_factor_symbol<-rlang::sym(comparative_factor_column)
-} else if(length(factor_columns)==0 ) {
-  print("No factor was supplied, dummy made.")
-  factor_columns<-"None"
-} else {
-  if(length(factor_columns)>2 ) stop("More than two factors were supplied")
-}
-factor_symbols<-rlang::syms(factor_columns) #list of symbols
 
 #input metadata and abundance data, put in right format for following functions
 meta_formatted_tb<-read_csv_clean(file=paste(path,metadatafile,sep = "/"),
                                   remove_empty = T) %>%
   format_metadata(sample_column = sample_column,
-                  factor_columns = factor_columns,
-                  norm_column = norm_column,
-                  tracer_column=tracer_column)
+                  factor_column = factor_column,
+                  norm_column = norm_column)
 
 abund_tb<-read_csv_clean(paste(path,abundancefile,sep = "/"),remove_empty = T)
 
 #read isotopologue or fractional contribution data. Set empty isotopologue tibble
 #if no isotopologue data supplied
-frac_tb<-read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
-                        remove_rowempty = T)
-if(any(grepl("parent",tolower(colnames(frac_tb))))) {
-  iso_tb<-extract_col_isotopologues(frac_tb,
+if(grepl("iso",tracerfile)) {
+  iso_tb<-extract_col_isotopologues(
+    read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T),
     iso_suffix_sep = "_")
   frac_tb<-calculate_FC(iso_tb)
 } else {
+  frac_tb<-read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T)
   iso_tb<-NULL
-}
-
-#make sure FC_position is set to slice when multiple tracer nutrients
-if (length(unique(pull(meta_formatted_tb[,tracer_column])))>1 & 
-    FC_position =="center") {
-  FC_position <- "slice"
-}
-
-#checks if the right amount of colors is set, sets right amount of default 
-#distinctive colors (amount of tracers +1 for unlabeled fraction) if not
-if (!length(unique(pull(meta_formatted_tb[,tracer_column]))) == length(col_labeling)-1){
-  if(length(unique(pull(meta_formatted_tb[,tracer_column])))==1) {
-    col_labeling<-c("#bfbfbf","#ffd966")
-  } else {
-    library(RColorBrewer)
-    col_labeling<-brewer.pal(length(unique(pull(meta_formatted_tb[,tracer_column])))+1,"Accent")
-  }
+  merged<-merge_input(meta_tb = meta_formatted_tb,
+                      abund_tb = abund_tb,
+                      frac_tb = frac_tb,
+                      sample_col = sample_column,
+                      compounds = compounds)
 }
 
 
@@ -353,7 +327,6 @@ if (length(compounds)<length(colnames(abund_tb)[2:ncol(abund_tb)])) {
 }
 
 #merge all input into one table, get compounds and factor orders
-# undebug(merge_input)
 tb<-merge_input(meta_tb = meta_formatted_tb,abund_tb = abund_tb,frac_tb = frac_tb,
                 compounds=compounds, sample_col = sample_column,
                 iso_tb=iso_tb)
@@ -363,122 +336,35 @@ compounds_updated<-colnames(tb)[which(!colnames(tb)%in%
 
 # compounds_updated<-"L-Glutamate_m5"  #for checking specific compound only
 
-#make list of factor orders per factor in data to allow multiple factors
+#make list of factor orders per factor to allow multiple factors
 fact_order<-list(NULL)
-for (i in 1:length(factor_columns)) {
-  fact_order[[i]]<-unique(pull(tb,!!factor_columns[i]))
+for (i in 1:length(factor_column)) {
+  fact_order[[i]]<-unique(pull(tb,!!factor_column[i]))
 }
 
-# from here test code long tb ---------------------------------------------
-
-#prepare summarized table with means and p values of differences
-#of selected factor levels with desired factor order
-sum_tb<-tb %>%
-  
-  #Select only desired columns and filter only supported datatypes.
-  #Extract data only for desired factor levels and set factor order
-  prepare_piedata(factor_columns = factor_columns,
-                  tracer_column = tracer_column,
-                  fact_order = fact_order)%>%
-  
-  #summarize data per combination of compounds, factors, tracer types and data types
-  #for each comparison factor level, test differences of first factor using P value
-  #if only one factor simply test differences of first factor once.
-  summarise_piedata(prepare_tb,factor_column = factor_column,
-                    compar_factor_column = compar_factor_column,
-                    tracer_column = tracer_column,fact_order = fact_order)
-
-#obtain isotopologue slice tb for plotting if isotopologues provided
-isos_calculated<-F
-if(!any(grepl("iso",tolower(sum_tb$datatype)))) {
-  if(exists(isoslice_tb)) rm("isoslice_tb")
-} else if (length(nutrient_symbols)>1){
-  if(exists(isoslice_tb)) rm("isoslice_tb")
-  print(paste0("Isotopologues provided, but multiple tracer nutrients used. ",
-        "This is not supported currently, isotopologue data will be ignored"))
-} else {
-  isoslice_tb<- sum_tb%>%
-    make_iso_slices(factor_columns=factor_columns, tracer_column = tracer_column)
-  
-  signi_iso_tb<-isoslice_tb%>%
-    mutate(iso_sign_label=if_else(P_FC>=0.05|is.na(P_FC),
-                                  "",
-                                  "*"))%>%
-    select(compound,!!!factor_symbols,iso_sign_label)%>%
-    group_by(compound,!!!factor_symbols)%>%
-    summarise(iso_sign_label=if_else(any(iso_sign_label=="*"),
-                                     "*",
-                                     ""))
-  isos_calculated<-T
-}
-
-#obtain fraccont slice tb for plotting, if desired add star to cohort name if any
-#isotopologues significant if isotopologues were calculated
-FCslice_tb<- sum_tb%>%
-  make_FC_slices(factor_columns=factor_columns, tracer_column = tracer_column)%>%
-  {
-    if(P_isotopologues & isos_calculated) {
-      left_join(.,signi_iso_tb) %>%
-        mutate(iso_sign_label=if_else(is.na(iso_sign_label),
-                                      "",
-                                      iso_sign_label),
-               !!factor_symbol:=paste0(!!factor_symbol,iso_sign_label))%>%
-        select(-iso_sign_label)
-    } else {
-      .
-    }
-  }
-
-selected_compound<-compounds[1]
-make_piechart(FCslice_tb,factor_columns = factor_columns,
-              tracer_column = tracer_column,
-              log_abund=log_abund,
-              circlelinecolor = circlelinecolor,selected_compound=selected_compound,
-              circlelinetypes = circlelinetypes,
-              maxcol_facet = maxcol_facet,
-              include_name = include_name,col_labeling = col_labeling,
-              alpha=alpha,font=font,otherfontsize = otherfontsize,
-              legendtitlesize =legendtitlesize,
-              cohortsize = cohortsize,include_legend = include_legend,
-              show_P=show_P)
-
-#todo make it work for isotopologue pies
-# undebug(make_piechart)
-make_piechart(isoslice_tb,factor_columns = factor_columns,
-              tracer_column = "Isotopologue",
-              log_abund=log_abund,
-              circlelinecolor = circlelinecolor,selected_compound=selected_compound,
-              circlelinetypes = circlelinetypes,
-              maxcol_facet = maxcol_facet,
-              include_name = include_name,col_labeling = NULL,
-              alpha=alpha,font=font,otherfontsize = otherfontsize,
-              legendtitlesize =legendtitlesize,
-              cohortsize = cohortsize,include_legend = include_legend,
-              show_P=show_P)
-
-
-
-
+#generate figures per compound with specified settings and save if requested
+undebug(generate_pie)
+undebug(obtain_compounddata)
+undebug(prepare_slicedata)
 generate_multiple_pies(tb,compounds=compounds_updated,
                        detail_charts=detail_charts,
                        pathway_charts=pathway_charts,
                        savepath=savepath,
                        normalize=normalize,
-                       factor_columns=factor_columns,
-                       tracer_column=tracer_column,
+                       fact_name=factor_column,
                        fact_order=fact_order, 
                        P_isotopologues=P_isotopologues,
                        log_abund=log_abund,
-                       label_decimals=label_decimals,
-                       percent_add=percent_add,
-                       FC_position=FC_position,
-                       min_lab_dist=min_lab_dist,
+                       label_decimals=labelDecimals,
+                       percent_add=percentAdd,
+                       FC_position=FCposition,
+                       min_lab_dist=minLabDist,
                        circlelinecolor=circlelinecolor,
                        circlelinetypes=circlelinetypes,
                        maxcol_facet=maxcol_facet,
                        include_name=include_name,
                        show_P=show_P,
-                       col_labeling=col_labeling,
+                       col_labeling=colLabeling,
                        alpha=alpha,
                        otherfontsize=otherfontsize,
                        font=font,
@@ -514,21 +400,6 @@ generate_multiple_pies(tb,compounds=compounds_updated,
 # 
 # debug(obtain_compounddata)
 # undebug(obtain_compounddata)
-
-
-# code saved for later figures from summarized longtb---------------------------------------------------------------------
-#pick normalized or not
-#prepare filename, remove problematic characters
-if (normalize) {
-  plotfilename<-paste0("pies normalized ",compound,".",format)
-  tb<-tb%>%
-    filter(datatype %in% c("FracCont","Isotopologues","NormAbund"))
-} else {
-  plotfilename<-paste0("pies ",compound,".",format)
-  tb<-tb%>%
-    filter(datatype %in% c("FracCont","Isotopologues","Abund"))
-}
-plotfilename<-gsub("/","-",plotfilename)
 
 
 # Overlay pies on map --------------------------------------------------------
@@ -587,8 +458,8 @@ meta_tb<-read_metacsv_clean(file=paste(path,metadatafile,sep = "/"),
 abund_tb<-read_csv_clean(paste(path,abundancefile,sep = "/"),remove_empty = T)
 fraccon_tb<-read_csv_clean(paste(path,tracerfile,sep = "/"),remove_empty = T)
 
-check_input(meta_tb,abund_tb,fraccon_tb,FC_position = FC_position,
-            col_labeling = col_labeling)
+check_input(meta_tb,abund_tb,fraccon_tb,FCposition = FCposition,
+            colLabeling = colLabeling)
 
 
 #Get factor and compound names from input
@@ -640,7 +511,7 @@ for (compound in compounds) {
   print(paste0(compound,": Summarizing abundance data"))
   sum_tb_ab<-summarize_compounddata(filter(compound_tb,datatype=="Abund"),
                                     compound,fact.names)%>%
-    rename(Abund=compound,P_RA=P)
+    rename(Abund=compound,P.RA=P)
   if (print_tables) print(sum_tb_ab)
   
   #rename P variable for fusing with abundance table that also has P column, 
@@ -650,7 +521,7 @@ for (compound in compounds) {
   sum_tb_FC<-summarize_compounddata(filter(compound_tb,datatype=="FracCont"),
                                     compound,fact.names)%>%
     add_unlabeled_sum(compound,fact.names = fact.names)%>%
-    rename(FracCont=compound,P_FC=P)
+    rename(FracCont=compound,P.FC=P)
   if (print_tables) print(sum_tb_FC)
   
   #gather abundance and fraccont data together in one input table with one 
@@ -660,9 +531,9 @@ for (compound in compounds) {
                "data and adding info required for plotting pie slices and",
                "labels"))
   slice_tb<-prepare_slicedata(compound_tb,sum_tb_FC,fact.names = fact.names,
-                              compound=compound,label_decimals = label_decimals,
-                              min_lab_dist = min_lab_dist,percent_add = percent_add,
-                              FC_position = FC_position)
+                              compound=compound,labelDecimals = labelDecimals,
+                              minLabDist = minLabDist,percentAdd = percentAdd,
+                              FCposition = FCposition)
   
   if (print_tables) print(slice_tb)
   
@@ -693,7 +564,7 @@ for (compound in compounds) {
           plot.title = element_text(size = barcohortsize, face = "bold"),
           legend.title = element_text(size = legendtitlesize),
           strip.text = element_text(size = barcohortsize))+
-    scale_fill_manual(values=col_labeling[length(col_labeling):1],guide=guide_legend(reverse=T))+
+    scale_fill_manual(values=colLabeling[length(colLabeling):1],guide=guide_legend(reverse=T))+
     labs(x=NULL, y=NULL)
   
   #removes legend if desired
@@ -732,8 +603,8 @@ meta_tb<-read_metacsv_clean(file=paste(path,metadatafile,sep = "/"),
 abund_tb<-read_csv_clean(paste(path,abundancefile,sep = "/"),remove_empty = T)
 fraccon_tb<-read_csv_clean(paste(path,tracerfile,sep = "/"),remove_empty = T)
 
-check_input(meta_tb,abund_tb,fraccon_tb,FC_position = FC_position,
-            col_labeling = col_labeling)
+check_input(meta_tb,abund_tb,fraccon_tb,FCposition = FCposition,
+            colLabeling = colLabeling)
 
 
 #Get factor and compound names from input
@@ -785,7 +656,7 @@ for (compound in compounds) {
   print(paste0(compound,": Summarizing abundance data"))
   sum_tb_ab<-summarize_compounddata(filter(compound_tb,datatype=="Abund"),
                                     compound,fact.names)%>%
-    rename(Abund=compound,P_RA=P)
+    rename(Abund=compound,P.RA=P)
   if (print_tables) print(sum_tb_ab)
   
   #rename P variable for fusing with abundance table that also has P column, 
@@ -795,7 +666,7 @@ for (compound in compounds) {
   sum_tb_FC<-summarize_compounddata(filter(compound_tb,datatype=="FracCont"),
                                     compound,fact.names)%>%
     add_unlabeled_sum(compound,fact.names = fact.names)%>%
-    rename(FracCont=compound,P_FC=P)
+    rename(FracCont=compound,P.FC=P)
   if (print_tables) print(sum_tb_FC)
   
   #gather abundance and fraccont data together in one input table with one 
@@ -805,9 +676,9 @@ for (compound in compounds) {
                "data and adding info required for plotting pie slices and",
                "labels"))
   slice_tb<-prepare_slicedata(compound_tb,sum_tb_FC,fact.names = fact.names,
-                              compound=compound,label_decimals = label_decimals,
-                              min_lab_dist = min_lab_dist,percent_add = percent_add,
-                              FC_position = FC_position)
+                              compound=compound,labelDecimals = labelDecimals,
+                              minLabDist = minLabDist,percentAdd = percentAdd,
+                              FCposition = FCposition)
   
   if (print_tables) print(slice_tb)
   
@@ -877,8 +748,8 @@ meta_tb<-read_metacsv_clean(file=paste(path,metadatafile,sep = "/"),
 abund_tb<-read_csv_clean(paste(path,abundancefile,sep = "/"),remove_empty = T)
 fraccon_tb<-read_csv_clean(paste(path,tracerfile,sep = "/"),remove_empty = T)
 
-check_input(meta_tb,abund_tb,fraccon_tb,FC_position = FC_position,
-            col_labeling = col_labeling)
+check_input(meta_tb,abund_tb,fraccon_tb,FCposition = FCposition,
+            colLabeling = colLabeling)
 
 
 #Get factor and compound names from input
@@ -930,7 +801,7 @@ for (compound in compounds) {
   print(paste0(compound,": Summarizing abundance data"))
   sum_tb_ab<-summarize_compounddata(filter(compound_tb,datatype=="Abund"),
                                     compound,fact.names)%>%
-    rename(Abund=compound,P_RA=P)
+    rename(Abund=compound,P.RA=P)
   if (print_tables) print(sum_tb_ab)
   
   #rename P variable for fusing with abundance table that also has P column, 
@@ -940,7 +811,7 @@ for (compound in compounds) {
   sum_tb_FC<-summarize_compounddata(filter(compound_tb,datatype=="FracCont"),
                                     compound,fact.names)%>%
     add_unlabeled_sum(compound,fact.names = fact.names)%>%
-    rename(FracCont=compound,P_FC=P)
+    rename(FracCont=compound,P.FC=P)
   if (print_tables) print(sum_tb_FC)
   
   #gather abundance and fraccont data together in one input table with one 
@@ -950,9 +821,9 @@ for (compound in compounds) {
                "data and adding info required for plotting pie slices and",
                "labels"))
   slice_tb<-prepare_slicedata(compound_tb,sum_tb_FC,fact.names = fact.names,
-                              compound=compound,label_decimals = label_decimals,
-                              min_lab_dist = min_lab_dist,percent_add = percent_add,
-                              FC_position = FC_position)
+                              compound=compound,labelDecimals = labelDecimals,
+                              minLabDist = minLabDist,percentAdd = percentAdd,
+                              FCposition = FCposition)
   
   if (print_tables) print(slice_tb)
   
@@ -986,7 +857,7 @@ for (compound in compounds) {
   #add name of compound if desired, and the assign colors and thier legend order
   # if (include_name) plotrect<-plotrect+ggtitle(compound)
   plotrect<-plotrect  +
-    scale_fill_manual(values=col_labeling,guide=guide_legend(reverse=T))
+    scale_fill_manual(values=colLabeling,guide=guide_legend(reverse=T))
   
   #transform bar to pie chart and plot pies on grid, depending on amount of 
   #factors.
@@ -1051,8 +922,8 @@ meta_tb<-read_metacsv_clean(file=paste(path,metadatafile,sep = "/"),
 abund_tb<-read_csv_clean(paste(path,abundancefile,sep = "/"),remove_empty = T)
 fraccon_tb<-read_csv_clean(paste(path,tracerfile,sep = "/"),remove_empty = T)
 
-check_input(meta_tb,abund_tb,fraccon_tb,FC_position = FC_position,
-            col_labeling = col_labeling)
+check_input(meta_tb,abund_tb,fraccon_tb,FCposition = FCposition,
+            colLabeling = colLabeling)
 
 
 #Get factor and compound names from input
@@ -1104,7 +975,7 @@ for (compound in compounds) {
   print(paste0(compound,": Summarizing abundance data"))
   sum_tb_ab<-summarize_compounddata(filter(compound_tb,datatype=="Abund"),
                                     compound,fact.names)%>%
-    rename(Abund=compound,P_RA=P)
+    rename(Abund=compound,P.RA=P)
   if (print_tables) print(sum_tb_ab)
   
   #rename P variable for fusing with abundance table that also has P column, 
@@ -1114,7 +985,7 @@ for (compound in compounds) {
   sum_tb_FC<-summarize_compounddata(filter(compound_tb,datatype=="FracCont"),
                                     compound,fact.names)%>%
     add_unlabeled_sum(compound,fact.names = fact.names)%>%
-    rename(FracCont=compound,P_FC=P)
+    rename(FracCont=compound,P.FC=P)
   if (print_tables) print(sum_tb_FC)
   
   #gather abundance and fraccont data together in one input table with one 
@@ -1125,12 +996,20 @@ for (compound in compounds) {
                "labels"))
   
   slice_tb<-prepare_slicedata(compound_tb,sum_tb_FC,fact.names = fact.names,
-                              compound=compound,label_decimals = label_decimals,
-                              min_lab_dist = min_lab_dist,percent_add = percent_add,
-                              FC_position = FC_position)
+                              compound=compound,labelDecimals = labelDecimals,
+                              minLabDist = minLabDist,percentAdd = percentAdd,
+                              FCposition = FCposition)
   
   if (print_tables) print(slice_tb)
 }
+
+# End ---------------------------------------------------------------------
+cbind(pull(frac_tb[,c(1)]),frac_tb[,c(4)])
+refvalues<-c(1.01,1.01,1.01,1.01)
+tgtvalues<-c(1.01,1.01,0,0)
+kruskal.test(c(refvalues,tgtvalues),
+             c(rep("Reference",length(refvalues)),
+               rep("Target",length(tgtvalues))))$p.value
 
 # Donotuse old Functions and libraries ---------------------------------------------------------------
 #load font library. For windows only it loads these fonts for bitmap output
@@ -1315,13 +1194,13 @@ get_factornames<-function(tb,twofactor=F) {
 
 #checks inputdata  with requested analysis parameters and generates warnings 
 #when incompatible. Uses <<- to set variables outside function environment
-check_input<-function(meta_tb,abund_tb,fraccon_tb,FC_position,col_labeling){
+check_input<-function(meta_tb,abund_tb,fraccon_tb,FCposition,colLabeling){
   #initialize messages variable
   messages<-NULL
   
-  #make sure FC_position is set to slice when multiple tracer nutrients
-  if (length(unique(meta_tb$Tracer))>1 & FC_position =="center"){
-    FC_position <<- "slice"
+  #make sure FCposition is set to slice when multiple tracer nutrients
+  if (length(unique(meta_tb$Tracer))>1 & FCposition =="center"){
+    FCposition <<- "slice"
     messages<-c(messages,paste0("FC label was requested to be in center, but",
                                 " as multiple tracer nutrients were used, ",
                                 "several labels will exist per pie. Putting",
@@ -1330,12 +1209,12 @@ check_input<-function(meta_tb,abund_tb,fraccon_tb,FC_position,col_labeling){
   
   #checks if the right amount of colors is set, sets right amount of default 
   #distinctive colors (amount of tracers +1 for unlabeled fraction) if not
-  if (!length(unique(meta_tb$Tracer)) == length(col_labeling)-1){
+  if (!length(unique(meta_tb$Tracer)) == length(colLabeling)-1){
     if(length(unique(meta_tb$Tracer))==1) {
-      col_labeling<<-c("#bfbfbf","#ffd966")
+      colLabeling<<-c("#bfbfbf","#ffd966")
     } else {
       library(RColorBrewer)
-      col_labeling<<-brewer.pal(length(unique(meta_tb$Tracer))+1,"Accent")
+      colLabeling<<-brewer.pal(length(unique(meta_tb$Tracer))+1,"Accent")
     }
     messages<-c(messages,paste0("Amount of label colors (colors for pie",
                                 "slices) is not equal",
@@ -1635,27 +1514,27 @@ add_unlabeled_sum<-function(sum_tb_FC,compound,fact.names){
 
 #add fractional contribution labels and positions to pie table with requested
 #formatting. 
-add_FClabels<-function(slice_tb,label_decimals,percent_add,fact.names,FC_position,
-                       min_lab_dist){
+add_FClabels<-function(slice_tb,labelDecimals,percentAdd,fact.names,FCposition,
+                       minLabDist){
   slice_tb<-rowwise(slice_tb) %>%    #needed to apply some functions per row  
     #Get label, set to ND if not detected in any sample in group. Set label
     #next to empty if labeling is requested in center
-    mutate(FracCont=round(FracCont,label_decimals+2),
-           labFC=if_else(percent_add,paste0(FracCont*100,"%"),
+    mutate(FracCont=round(FracCont,labelDecimals+2),
+           labFC=if_else(percentAdd,paste0(FracCont*100,"%"),
                          as.character(FracCont*100)),
            labFC=if_else(Abund==0,"ND",labFC),
-           labFC=if_else(FC_position=="center"& Tracer=="Unlabeled","",
+           labFC=if_else(FCposition=="center"& Tracer=="Unlabeled","",
                          labFC))%>%
     group_by(!!!rlang::syms(fact.names)) %>%
     #get labeling positions on FC and abundance axes. Depends if in
     #center or in slice. Center if not detected (label ND)
     #If slice, set posFC as sum of current and all 
-    #preceding FC's-half the current FC. Set posAb in slice at min_lab_dist radius  
-    #if abundance smaller than twice min_lab_dist. 
-    mutate(FClab_posAngle=if_else(FC_position=="center"|Abund==0,0,
+    #preceding FC's-half the current FC. Set posAb in slice at minLabDist radius  
+    #if abundance smaller than twice minLabDist. 
+    mutate(FClab_posAngle=if_else(FCposition=="center"|Abund==0,0,
                                   cumsum(FracCont)-FracCont/2),
-           FClab_posDist=if_else(FC_position=="center"|Abund==0,0,
-                                 if_else(Abund<min_lab_dist*2,min_lab_dist,
+           FClab_posDist=if_else(FCposition=="center"|Abund==0,0,
+                                 if_else(Abund<minLabDist*2,minLabDist,
                                          Abund/2)))%>%
     ungroup()                   #undo grouping
 }
@@ -1666,7 +1545,7 @@ add_FClabels<-function(slice_tb,label_decimals,percent_add,fact.names,FC_positio
 #labeled and unlabeled fraction correspond to the desired slices of a pie with
 #this radius 
 prepare_slicedata<-function(compound_tb,sum_tb_FC,compound,fact.names,
-                            label_decimals,percent_add,FC_position,min_lab_dist){
+                            labelDecimals,percentAdd,FCposition,minLabDist){
   
   #factors and compounds need to be symbolized to use in 
   #tidyverse grouping function
@@ -1695,8 +1574,8 @@ prepare_slicedata<-function(compound_tb,sum_tb_FC,compound,fact.names,
                                                       valuecolumn = "Abund",Dtype = "Abund"))%>%
     ungroup()%>%
     right_join(slice_ab_tb,by=fact.names)%>%
-    select(P_RA=P,!c(datatype,P))%>%
-    relocate(P_RA, .after = last_col())
+    select(P.RA=P,!c(datatype,P))%>%
+    relocate(P.RA, .after = last_col())
   
   
   #join abundance table to all tracer to add results to unlabeled as well,
@@ -1707,26 +1586,26 @@ prepare_slicedata<-function(compound_tb,sum_tb_FC,compound,fact.names,
   
   #Add FC labels and their positions, make P label and add P label radius 
   #positions, set informative table names and clean up unneccesary columns
-  slice_tb<-add_FClabels(slice_tb,label_decimals=label_decimals,
-                         percent_add=percent_add,fact.names = fact.names,
-                         FC_position=FC_position,min_lab_dist=min_lab_dist)%>%
+  slice_tb<-add_FClabels(slice_tb,labelDecimals=labelDecimals,
+                         percentAdd=percentAdd,fact.names = fact.names,
+                         FCposition=FCposition,minLabDist=minLabDist)%>%
     rowwise()%>%
-    mutate(P_FClab=case_when(
-      is.na(P_FC) ~ "",
-      P_FC==99 ~ "N=1,P=NA",
-      length(unique(slice_tb$Tracer))>2 & P_FC<0.05 ~ "*",
-      length(unique(slice_tb$Tracer))>2 & P_FC<0.1 ~ "`",
-      length(unique(slice_tb$Tracer))>2 & P_FC>=0.05 ~ "",
-      length(unique(slice_tb$Tracer))<=2 & P_FC<0.05 ~paste0("pFC=",
-                                                             round(P_FC,2),
+    mutate(P.FClab=case_when(
+      is.na(P.FC) ~ "",
+      P.FC==99 ~ "N=1,P=NA",
+      length(unique(slice_tb$Tracer))>2 & P.FC<0.05 ~ "*",
+      length(unique(slice_tb$Tracer))>2 & P.FC<0.1 ~ "`",
+      length(unique(slice_tb$Tracer))>2 & P.FC>=0.05 ~ "",
+      length(unique(slice_tb$Tracer))<=2 & P.FC<0.05 ~paste0("pFC=",
+                                                             round(P.FC,2),
                                                              "*"),
-      length(unique(slice_tb$Tracer))<=2 & P_FC>=0.05 ~ paste0("pFC=",
-                                                               round(P_FC,2))),
-      P_RAlab=case_when(
-        is.na(P_RA) ~ "",
-        P_RA==99 ~ "N=1,P=NA",
-        P_RA<0.05 ~ paste0("pRA=",round(P_RA,2),"*"),
-        P_RA>=0.05 ~ paste0("pRA=",round(P_RA,2))),
+      length(unique(slice_tb$Tracer))<=2 & P.FC>=0.05 ~ paste0("pFC=",
+                                                               round(P.FC,2))),
+      P.RAlab=case_when(
+        is.na(P.RA) ~ "",
+        P.RA==99 ~ "N=1,P=NA",
+        P.RA<0.05 ~ paste0("pRA=",round(P.RA,2),"*"),
+        P.RA>=0.05 ~ paste0("pRA=",round(P.RA,2))),
       Labeling=Tracer)%>%
     select(!Tracer)%>%
     ungroup()
@@ -1739,7 +1618,7 @@ make_piechart<-function(slice_tb,twofactor=twofactor,compound,
                         fact.names=fact.names,circlelinecolor="gray",
                         maxcol_facet=4,
                         circlelinetypes=c(1,1,1,1),yAxLab="",xAxLab="",
-                        include_name=F,col_labeling=col_labeling,
+                        include_name=F,colLabeling=colLabeling,
                         otherfontsize=10,font="sans",legendtitlesize=10,
                         cohortsize=12,include_legend=T,invert_FCangle=T){
   
@@ -1774,14 +1653,14 @@ make_piechart<-function(slice_tb,twofactor=twofactor,compound,
   #add name of compound if desired, and the assign colors and thier legend order
   if (include_name) plotrect<-plotrect+ggtitle(compound)
   plotrect<-plotrect  +
-    scale_fill_manual(values=col_labeling,guide=guide_legend(reverse=T))
+    scale_fill_manual(values=colLabeling,guide=guide_legend(reverse=T))
   
   #positions of text at specified locations. GGrepel used when multiple tracer
   # to avoid labels overlapping. Fontsize needs to be adjusted for reasons: 
   #https://stackoverflow.com/questions/25061822/ggplot-geom-text-font-size-control
   if (length(unique(slice_tb$Labeling))>2) {
     plotrect<-plotrect  +
-      geom_text_repel(aes(label=paste0(labFC,P_FClab)),
+      geom_text_repel(aes(label=paste0(labFC,P.FClab)),
                       x = slice_tb$FClab_posDist,y=slice_tb$FClab_posAngle,
                       size=otherfontsize*5/14, family=font,
                       point.size=NA,direction = "x")
@@ -1789,7 +1668,7 @@ make_piechart<-function(slice_tb,twofactor=twofactor,compound,
     plotrect<-plotrect  +
       geom_text(aes(label=labFC),x = slice_tb$FClab_posDist,
                 y=slice_tb$FClab_posAngle,size=otherfontsize*5/14, family=font)+  
-      geom_text(aes(label=P_FClab),x=1.6,y=5/8,size=otherfontsize*5/14,
+      geom_text(aes(label=P.FClab),x=1.6,y=5/8,size=otherfontsize*5/14,
                 hjust="inward",vjust="inward",family=font)      
   }
   
@@ -1812,7 +1691,7 @@ make_piechart<-function(slice_tb,twofactor=twofactor,compound,
   #sets relative abundance p values in upper right corner of pie plots
   pies<-piebasic +
     labs(x=NULL, y=NULL)+                           
-    geom_text(aes(label=P_RAlab),x=1.6,y=RAlab_y,size=otherfontsize*5/14,
+    geom_text(aes(label=P.RAlab),x=1.6,y=RAlab_y,size=otherfontsize*5/14,
               hjust="inward",vjust="inward",family=font) + 
     #Change plots to black on white, remove text axes (fraction) that interfere
     #with circles, axis ticks, fraction grid lines. set legend title size,
@@ -1836,10 +1715,10 @@ make_piechart<-function(slice_tb,twofactor=twofactor,compound,
 
 # Generate pie chart plot for each compound and save if requested
 generate_pies<-function(tb,compounds,pathway_charts,save_chart,savepath,normalize=T,
-                        fact.names,label_decimals,percent_add,FC_position,
-                        min_lab_dist,twofactor,circlelinecolor,circlelinetypes,
+                        fact.names,labelDecimals,percentAdd,FCposition,
+                        minLabDist,twofactor,circlelinecolor,circlelinetypes,
                         maxcol_facet=maxcol_facet,
-                        yAxLab,xAxLab,include_name,col_labeling,otherfontsize,font,
+                        yAxLab,xAxLab,include_name,colLabeling,otherfontsize,font,
                         legendtitlesize,cohortsize,include_legend,
                         invert_FCangle,
                         mapotherotherfontsize,mapcohortsize,width,height,
@@ -1880,7 +1759,7 @@ generate_pies<-function(tb,compounds,pathway_charts,save_chart,savepath,normaliz
     print(paste0(compound,": Summarizing abundance data"))
     sum_tb_ab<-summarize_compounddata(filter(compound_tb,datatype=="Abund"),
                                       compound,fact.names)%>%
-      rename(Abund=compound,P_RA=P)
+      rename(Abund=compound,P.RA=P)
     if (print_tables) print(sum_tb_ab)
     
     #rename P variable for fusing with abundance table that also has P column, 
@@ -1890,7 +1769,7 @@ generate_pies<-function(tb,compounds,pathway_charts,save_chart,savepath,normaliz
     sum_tb_FC<-summarize_compounddata(filter(compound_tb,datatype=="FracCont"),
                                       compound,fact.names)%>%
       add_unlabeled_sum(compound,fact.names = fact.names)%>%
-      rename(FracCont=compound,P_FC=P)
+      rename(FracCont=compound,P.FC=P)
     if (print_tables) print(sum_tb_FC)
     
     #gather abundance and fraccont data together in one input table with one 
@@ -1900,9 +1779,9 @@ generate_pies<-function(tb,compounds,pathway_charts,save_chart,savepath,normaliz
                  "data and adding info required for plotting pie slices and",
                  "labels"))
     slice_tb<-prepare_slicedata(compound_tb,sum_tb_FC,fact.names = fact.names,
-                                compound=compound,label_decimals = label_decimals,
-                                min_lab_dist = min_lab_dist,percent_add = percent_add,
-                                FC_position = FC_position)
+                                compound=compound,labelDecimals = labelDecimals,
+                                minLabDist = minLabDist,percentAdd = percentAdd,
+                                FCposition = FCposition)
     
     if (print_tables) print(slice_tb)
     
@@ -1911,7 +1790,7 @@ generate_pies<-function(tb,compounds,pathway_charts,save_chart,savepath,normaliz
     pies<-make_piechart(slice_tb,twofactor = twofactor,fact.names = fact.names,
                         circlelinecolor = circlelinecolor,compound=compound,
                         circlelinetypes = circlelinetypes,
-                        include_name = include_name,col_labeling = col_labeling,
+                        include_name = include_name,colLabeling = colLabeling,
                         font=font,otherfontsize = otherfontsize,
                         legendtitlesize =legendtitlesize,
                         cohortsize = cohortsize,include_legend = include_legend,
@@ -1937,7 +1816,7 @@ generate_pies<-function(tb,compounds,pathway_charts,save_chart,savepath,normaliz
                           circlelinecolor = circlelinecolor,compound=compound,
                           circlelinetypes = circlelinetypes,
                           maxcol_facet=maxcol_facet,
-                          include_name = F,col_labeling = col_labeling,
+                          include_name = F,colLabeling = colLabeling,
                           font=font,otherfontsize = mapotherfontsize,
                           cohortsize = mapcohortsize,include_legend = F,
                           invert_FCangle = invert_FCangle)

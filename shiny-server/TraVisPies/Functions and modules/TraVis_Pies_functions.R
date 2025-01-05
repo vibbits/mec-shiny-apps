@@ -540,7 +540,7 @@ obtain_compounddata<-function(tb,compound,fact_name,
   compound_tb<-tb %>% select(!!fact_name,datatype,!!compound) %>%
     filter(datatype %in% c("FracCont","Isotopologues",
                            if_else(normalize,"NormAbund","Abund"))) %>%
-    filter(!!fact_symbol %in% fact_order) %>%
+    filter(!!fact_symbol %in% fact_order[[1]]) %>%
     droplevels() %>%
     
     #Change factor variable from text into actual factor for visualisation and
@@ -951,7 +951,7 @@ generate_pie<-function(tb,compound,detail_charts,pathway_charts,savepath,
   #with this radius 
   print(paste0("preparing slice data"))
   
-  slice_tb<-prepare_slicedata(compound_tb,fact_name = fact_name,
+  slice_tb<<-prepare_slicedata(compound_tb,fact_name = fact_name,
                               compound=compound,label_decimals = label_decimals,
                               min_lab_dist = min_lab_dist,
                               percent_add = percent_add,
