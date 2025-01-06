@@ -106,6 +106,137 @@ replace_except_last <- function(input_strings, to_replace = "_", replacement = "
   sapply(input_strings, replace_single_string)
 }
 
+#reads in an abundance, fractional contribution or isotopologue sheet of a 
+#dolly excel file by name,and prepares the desired table from it
+read_dollysheet_to_long<-function(excelfile,sheetname,datatypename,lib_tb=NULL,meta_tb) {
+  #read excel sheet data, if derivatized change names to underivatized
+  excel_tb <- read_excel(excelfile,sheetname)
+  # excel_tb <- read_excel(excelfile,"correctedIsotopologues_C13")
+  
+  if(any(colnames(lib_tb)=="Orig_name")) {
+    for(i in 1:nrow(lib_tb)){
+      colnames(excel_tb)<-sub(lib_tb$compound[i],
+                              lib_tb$Orig_name[i],
+                              colnames(excel_tb),
+                              fixed = T)
+    }  
+  }
+  
+  #replace all but last _ in isotopologe compound names for easy 
+  #substringing later. To match names, make sure to replace all _ in 
+  #non-isotopologue compound names
+  if (grepl("isotopologue",tolower(sheetname))) {
+    colnames(excel_tb)<-replace_except_last(colnames(excel_tb))
+  } else {
+    colnames(excel_tb)<-gsub("_"," ",colnames(excel_tb))
+  }
+  
+  
+  #detect internal standards in sheet
+  headers<-excel_tb %>% 
+    select(where(~ all(is.na(.)))) %>%
+    colnames()
+  
+  if (length(headers[which(grepl("internal",tolower(headers)))])>0) {
+    intstdfirstcol<-which(colnames(excel_tb) ==
+                            headers[which(grepl("internal",
+                                                tolower(headers)))][1])+1
+    intstdlastcol<-which(colnames(excel_tb) ==
+                           headers[which(grepl("internal",
+                                               tolower(headers)))+1][1])-1
+    intstds<-colnames(excel_tb)[intstdfirstcol:intstdlastcol]
+  } else {
+    intstds<-NULL
+  }  
+  
+  #remove empty rows and columns and check if abundance sheet for specific actions to 
+  #take with it. Convert data to long format if not done before.
+  excelclean <- excel_tb %>% 
+    select(where(~ !all(is.na(.))))%>%
+    na.omit()%>%
+    rename(sample=1)
+  
+  long_format<-F
+  if (grepl("abundance",tolower(sheetname))){
+    
+    #if LOD in sheet calculate LOD and average blank from supposed mock samples,
+    #and remove these samples from the abundance sheet. Set blank and LOD to 0
+    #for internal standards.
+    #then remove rows that contain blanks, lod from sheet, subtract 
+    #blank and add LOD and above LOD term to each compound-sample combination, 
+    #and keep both blank uncorrected and corrected abundances and LOD.
+    if (any(tolower(meta_tb$sample_type)=="blank")) {
+      blanks_tb<-excelclean %>%
+        filter(sample %in% c(meta_tb %>%
+                               filter(tolower(meta_tb$sample_type)=="blank")%>%
+                               pull(sample))) %>%
+        pivot_longer(cols = 2:ncol(.),
+                     names_to = "compound", 
+                     values_to= "abundance")%>%
+        group_by(compound)%>%
+        summarise(av_blank=mean(abundance),
+                  LOD=av_blank+3*sd(abundance))%>%
+        mutate(
+          av_blank=if_else(compound %in% intstds,0,av_blank),
+          LOD=if_else(compound %in% intstds,0,LOD)
+        )
+      excelclean <- excelclean %>%
+        pivot_longer(cols = 2:ncol(.),
+                     names_to = "compound", 
+                     values_to= "abundance")%>%
+        left_join(blanks_tb, by=join_by(compound))%>%
+        mutate(ab_blankcor=abundance-av_blank,
+               LOD_blankcor=LOD-av_blank,
+               detected=abundance>LOD) %>%
+        pivot_longer(cols = c("abundance","ab_blankcor"),
+                     names_to = "datatype", 
+                     values_to= "value") %>%
+        select(sample,compound,datatype,value,LOD,LOD_blankcor,detected)%>%
+        filter(!sample %in% c(meta_tb %>%
+                                filter(tolower(meta_tb$sample_type)=="blank")%>%
+                                pull(sample)),
+               !grepl("lod",tolower(sample)))
+      
+      long_format<-T
+    } else {
+      #if no mocks, don't do blank correction
+      print(paste0("No samples indicated as blank in metadata column sample , ",
+                   "type. Assumed no LOD calculation or blank correction needed"))
+    }
+  } else {
+    #remove internal standard columns and mock samples for data other than
+    #abundance
+    excelclean<-excelclean %>%
+      select(-any_of(intstds)) %>%
+      filter(!sample %in% c(meta_tb %>%
+                              filter(tolower(meta_tb$sample_type)=="blank")%>%
+                              pull(sample)))
+  }
+  
+  #get data in long format if still needed, for corrected isotopologues
+  #make one entry per isotopologue
+  if (!long_format) {
+    excelclean<-excelclean%>%
+      pivot_longer(2:ncol(.),names_to = "compound")%>%
+      mutate(datatype=datatypename) %>%
+      mutate(
+        datatype=if_else(
+          grepl("isotopologue",tolower(datatype)),
+          paste0(datatype,substr(compound,regexpr("_",compound,fixed = T),
+                                 nchar(compound))),
+          datatype),
+        compound=if_else(
+          grepl("isotopologue",tolower(datatype)),
+          substr(compound,1,regexpr("_",compound,fixed = T)-1),
+          compound)
+      )
+    
+    long_format<-T
+  }
+  
+  return(excelclean)
+}
+
 # function for loading and cleaning measurement data
 read_csv_clean<- function(file,remove_empty=FALSE,perc_to_num=T,
                           remove_rowempty=FALSE,
@@ -132,6 +263,9 @@ read_csv_clean<- function(file,remove_empty=FALSE,perc_to_num=T,
   return(input_tb)
 }
 
+data_to_long<-function(data,
+                       datatypename=c("Abund","normAbund","FracCont",
+                                      "Isotopologues"),lib_tb=NULL,meta_tb)
 #function to check escher-trace like corrected isotopologue input data
 #returns "OK" if all checks are passed, error message otherwise
 # tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_Isotopologues.csv",
@@ -163,18 +297,38 @@ check_iso_input<-function(tb){
   return("OK")
 }
 
+#extract metadata from an excel sheet
+extract_excel_metatb<-function(excelpath,sheetnamestring="meta",samplename="Sample"){
+  sample_symbol<-rlang::sym(samplename)
+  
+  metasheetname<-excel_sheets(excelpath)[
+    which(grepl(sheetnamestring,tolower(excel_sheets(excelpath))))]
+  if(length(metasheetname)==0) {
+    stop(paste0("No sheets with metadata, add a metadata sheet with ",
+                 sheetnamestring," in its name."))
+  }
+  if(length(metasheetname)>1) {
+    print(paste0("Multiple potential metadata sheets, took first sheet with ",
+          sheetnamestring," in its name."))
+    metasheetname<-metasheetname[1]
+  }
+  print(paste0("Name of sheet used for metadata: ",metasheetname))
+  
+  #read excelsheet, rename sample column, remove empty columns
+  read_excel(excelpath,metasheetname)%>%
+    rename(!!sample_symbol:=1)%>%
+    select(where(~ !all(is.na(.))))
+}
 
 #function to prepare metadata to uniform format
 format_metadata<-function(meta_tb,sample_column,factor_columns,norm_column=NULL,
-                          tracer_column="Labeling") {
+                          tracer_column="Labeling",sampletype_column) {
   sample_symbol<-rlang::sym(sample_column)
   tracer_symbol<-rlang::sym(tracer_column)
+  sampletype_symbol<-rlang::sym(sampletype_column)
+  fact_symbols<-rlang::syms(factor_columns)
   
-  if (length(factor_columns)<2) {
-    fact_symbol<-rlang::sym(factor_columns)
-  } else if (length(factor_columns)==2){
-    fact_symbol<-rlang::syms(factor_columns)
-  } else {
+  if (length(factor_columns)>2) {
     stop("At most 2 factor variables can be specified in TraVis Pies")
   }
   
@@ -188,7 +342,12 @@ format_metadata<-function(meta_tb,sample_column,factor_columns,norm_column=NULL,
   if (norm_column == "None") {
     meta_tb$Normalisation<-1
   } else {
-    meta_tb<-rename(meta_tb,Normalisation=all_of(norm_column))
+    #rename normalisation variable, replace missing normalisation values by 1, 
+    #assuming it meant no normalisation needed
+    meta_tb<-rename(meta_tb,Normalisation=all_of(norm_column))%>%
+      mutate(Normalisation=if_else(is.na(Normalisation),
+                                   1,
+                                   Normalisation))
   }
   
   #check tracer column presence. If not there, add dummytracer as tracer name,
@@ -212,30 +371,160 @@ format_metadata<-function(meta_tb,sample_column,factor_columns,norm_column=NULL,
   #(as_factor might also work but I had issues and dropped it)
   #drop normalisation column if dummy
   if (length(factor_columns)==2){
-    meta_tb<-transmute(meta_tb,
-                       !!sample_symbol := as.character(pull(meta_tb,
-                                                            sample_column)),
-                       !!fact_symbol[[1]] := as.character(pull(meta_tb,
-                                                             factor_columns[1])),
-                       !!fact_symbol[[2]] := as.character(pull(meta_tb,
-                                                             factor_columns[2])),
-                       Normalisation=as.numeric(Normalisation),
-                       !!tracer_symbol := as.character(pull(meta_tb,
-                                                            tracer_column)))
+    meta_tb<-mutate(meta_tb,
+                    !!sample_symbol := as.character(!!sample_symbol),
+                    !!fact_symbols[[1]] := as.character(!!fact_symbols[[1]]),
+                    !!fact_symbols[[2]] := as.character(!!fact_symbols[[2]]),
+                    Normalisation=as.numeric(Normalisation),
+                    !!tracer_symbol := as.character(!!tracer_symbol),
+                    !!sampletype_symbol := as.character(!!sampletype_symbol)
+                    ) 
+                       
   } else {
-    meta_tb<-transmute(meta_tb,
-                       !!sample_symbol := as.character(pull(meta_tb,
-                                                            sample_column)),
-                       !!fact_symbol := as.character(pull(meta_tb,factor_columns)),
+    meta_tb<-mutate(meta_tb,
+                       !!sample_symbol := as.character(!!sample_symbol),
+                       !!fact_symbols[[1]] := as.character(!!fact_symbols[[1]]),
                        Normalisation=as.numeric(Normalisation),
-                       !!tracer_symbol := as.character(pull(meta_tb,
-                                                            tracer_column)))
+                       !!tracer_symbol := as.character(!!tracer_symbol),
+                       !!sampletype_symbol := as.character(!!sampletype_symbol)
+    ) 
+                       
   }
     
- 
+  meta_tb<-select(meta_tb,!!sample_symbol,!!!fact_symbols,Normalisation,
+                  !!tracer_symbol,!!sampletype_symbol)
   if (norm_column=="None") meta_tb<-select(meta_tb,-Normalisation)
   
   return(meta_tb)
+}
+
+read_dollysheet_to_long<-function(excelfile,sheetname,datatypename=c("Abund","normAbund","FracCont","Isotopologues"),lib_tb=NULL,meta_tb) {
+  #read excel sheet data, if derivatized change names to underivatized
+  excel_tb <- read_excel(excelfile,sheetname)
+  # excel_tb <- read_excel(excelfile,"correctedIsotopologues_C13")
+  
+  if(any(colnames(lib_tb)=="Orig_name")) {
+    for(i in 1:nrow(lib_tb)){
+      colnames(excel_tb)<-sub(lib_tb$compound[i],
+                              lib_tb$Orig_name[i],
+                              colnames(excel_tb),
+                              fixed = T)
+    }  
+  }
+  
+  #replace all but last _ in isotopologe compound names for easy 
+  #substringing later. To match names, make sure to replace all _ in 
+  #non-isotopologue compound names
+  if (grepl("isotopologue",tolower(sheetname))) {
+    colnames(excel_tb)<-replace_except_last(colnames(excel_tb))
+  } else {
+    colnames(excel_tb)<-gsub("_"," ",colnames(excel_tb))
+  }
+  
+  
+  #detect internal standards in sheet
+  headers<-excel_tb %>% 
+    select(where(~ all(is.na(.)))) %>%
+    colnames()
+  
+  if (length(headers[which(grepl("internal",tolower(headers)))])>0) {
+    intstdfirstcol<-which(colnames(excel_tb) ==
+                            headers[which(grepl("internal",
+                                                tolower(headers)))][1])+1
+    intstdlastcol<-which(colnames(excel_tb) ==
+                           headers[which(grepl("internal",
+                                               tolower(headers)))+1][1])-1
+    intstds<-colnames(excel_tb)[intstdfirstcol:intstdlastcol]
+  } else {
+    intstds<-NULL
+  }  
+  
+  #remove empty rows and columns and check if abundance sheet for specific actions to 
+  #take with it. Convert data to long format if not done before.
+  excelclean <- excel_tb %>% 
+    select(where(~ !all(is.na(.))))%>%
+    na.omit()%>%
+    rename(sample=1)
+  
+  long_format<-F
+  if (grepl("abundance",tolower(sheetname))){
+    
+    #if LOD in sheet calculate LOD and average blank from supposed mock samples,
+    #and remove these samples from the abundance sheet. Set blank and LOD to 0
+    #for internal standards.
+    #then remove rows that contain blanks, lod from sheet, subtract 
+    #blank and add LOD and above LOD term to each compound-sample combination, 
+    #and keep both blank uncorrected and corrected abundances and LOD.
+    if (any(tolower(meta_tb$sample_type)=="blank")) {
+      blanks_tb<-excelclean %>%
+        filter(sample %in% c(meta_tb %>%
+                               filter(tolower(meta_tb$sample_type)=="blank")%>%
+                               pull(sample))) %>%
+        pivot_longer(cols = 2:ncol(.),
+                     names_to = "compound", 
+                     values_to= "abundance")%>%
+        group_by(compound)%>%
+        summarise(av_blank=mean(abundance),
+                  LOD=av_blank+3*sd(abundance))%>%
+        mutate(
+          av_blank=if_else(compound %in% intstds,0,av_blank),
+          LOD=if_else(compound %in% intstds,0,LOD)
+        )
+      excelclean <- excelclean %>%
+        pivot_longer(cols = 2:ncol(.),
+                     names_to = "compound", 
+                     values_to= "abundance")%>%
+        left_join(blanks_tb, by=join_by(compound))%>%
+        mutate(ab_blankcor=abundance-av_blank,
+               LOD_blankcor=LOD-av_blank,
+               detected=abundance>LOD) %>%
+        pivot_longer(cols = c("abundance","ab_blankcor"),
+                     names_to = "datatype", 
+                     values_to= "value") %>%
+        select(sample,compound,datatype,value,LOD,LOD_blankcor,detected)%>%
+        filter(!sample %in% c(meta_tb %>%
+                                filter(tolower(meta_tb$sample_type)=="blank")%>%
+                                pull(sample)),
+               !grepl("lod",tolower(sample)))
+      
+      long_format<-T
+    } else {
+      #if no mocks, don't do blank correction
+      print(paste0("No samples indicated as blank in metadata column sample , ",
+                   "type. Assumed no LOD calculation or blank correction needed"))
+    }
+  } else {
+    #remove internal standard columns and mock samples for data other than
+    #abundance
+    excelclean<-excelclean %>%
+      select(-any_of(intstds)) %>%
+      filter(!sample %in% c(meta_tb %>%
+                              filter(tolower(meta_tb$sample_type)=="blank")%>%
+                              pull(sample)))
+  }
+  
+  #get data in long format if still needed, for corrected isotopologues
+  #make one entry per isotopologue
+  if (!long_format) {
+    excelclean<-excelclean%>%
+      pivot_longer(2:ncol(.),names_to = "compound")%>%
+      mutate(datatype=datatypename) %>%
+      mutate(
+        datatype=if_else(
+          grepl("isotopologue",tolower(datatype)),
+          paste0(datatype,substr(compound,regexpr("_",compound,fixed = T),
+                                 nchar(compound))),
+          datatype),
+        compound=if_else(
+          grepl("isotopologue",tolower(datatype)),
+          substr(compound,1,regexpr("_",compound,fixed = T)-1),
+          compound)
+      )
+    
+    long_format<-T
+  }
+  
+  return(excelclean)
 }
 
 #function to check which elements are common among all vectors
@@ -964,7 +1253,7 @@ make_piechart<-function(slice_tb,selected_compound,tracer_column=tracer_column,
   #extract data of selected compound only
   slice_tb <- slice_tb %>%
     filter(compound==selected_compound)%>%
-    mutate(Isotopologue=factor(Isotopologue))
+    mutate(!!tracer_symbol:=factor(!!tracer_symbol))
   
   #create starting barplot. X= halved abundances required, take log if requested
   #Adds gridlines that will become reference circles at 0.25 0.5 0.75 and 1 on 

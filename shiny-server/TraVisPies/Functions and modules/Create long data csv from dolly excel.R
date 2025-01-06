@@ -39,7 +39,7 @@ replace_except_last <- function(input_strings, to_replace = "_", replacement = "
 
 #reads in an abundance, fractional contribution or isotopologue sheet of a 
 #dolly excel file by name,and prepares the desired table from it
-read_dollysheet_to_long<-function(excelfile,sheetname,datatypename,lib_tb=NULL,meta_tb) {
+read_dollysheet_to_long<-function(excelfile,sheetname,datatypename=c("Abund","normAbund","FracCont","Isotopologues"),lib_tb=NULL,meta_tb) {
   #read excel sheet data, if derivatized change names to underivatized
   excel_tb <- read_excel(excelfile,sheetname)
   # excel_tb <- read_excel(excelfile,"correctedIsotopologues_C13")
