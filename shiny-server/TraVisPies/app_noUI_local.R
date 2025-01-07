@@ -41,6 +41,26 @@
 #in other files that are not in the metadatafile will not be used to generate
 #results.
 
+#Todo nonUI
+
+#read in input data using a function that takes a path to either excel file
+#or folder, then assigns data based on namestrings in respectively excel sheets
+#or csv files. If possible to work with warning functions, output is the long 
+#tibble, otherwise is a list with the different tibbles
+
+#allow everything to function if optional variables set to NULL if not present
+
+# test 2 factor with iso input: the sicrit comparison data!
+
+#something is wrong with ggrepel, used to work? Try older version. 
+
+# todo make it work for isotopologue pies
+
+
+#Todo UI
+#Set variables = "None" as =NULL
+#adapt UI functions to work with new setup
+
 # Functions and libraries ---------------------------------------------------------------
 #libraries for functions used
 library(here)    #to make r source from file location instead of magic stuff
@@ -52,7 +72,6 @@ library(tibble)       #for manipulating tibbles
 library(readr)        #for writing .csv file of merged output
 library(tidyr)        #for restructuring data tibbles
 library(broom)        #for using regression models in dplyr pipes
-library(rstatix)      #pipe-friendly Kruskal Wallis test
 library(ggplot2)      #for generating the pie chart plots
 
 #load functions to support the app 
@@ -66,8 +85,6 @@ source(here::here("Functions and modules/TraVis_Pies_functions merge isos and mu
 #example: rawpath<-r"(C:\User\Projects\Pie charts)"
 #can also specify relative to the project folder using the here::here command
 
-#todo remove usage of the 
-#todo test 2 factor with iso input: the sicrit comparison data!
 #set variables to NULL or none as required by functions that might not be present in data
 #and inputtype to NULL
 comparative_factor_column<-sampletype_column<-NULL
@@ -202,7 +219,6 @@ normalize<-(!norm_column=="None")                         #normalize abundances?
 print_tables<-F                       #print generated tables to console?
 compounds<-NULL                      #which compounds included; NULL => all
 show_P<-T                              #show P values on pie plots
-compounds<-"Glucose 1,6-bisphosphate"  #TODO:remove
 
 #figure appearance parameters
 #any color input recognized by ggplot2::scale_fill_manual can be used
@@ -277,16 +293,6 @@ format<-"png"
 
 
 # Code-------------------------------------------------------------------
-#todo merge with code for reading excel files:
-#load result data cleaning all _, except isos which keep last _
-#make sure all have long column as soon as possible, before merging
-#derive settings from input
-#to add:
-# 1) how to deal with normalisation if metadata contains a normalisation
-#column => allow user input normalisation factor if any or none
-#  2) how to count isotopologue number to do fractional contribution? Need 
-#unified way to count isotopes (for now only single tracer element)
-
 
 #If no tracer column, make dummy column and set tracer column name to Tracer
 #then make symbol for dplyr pipelines
@@ -672,7 +678,6 @@ generate_multiple_pies(tb,compounds=compounds_updated,
                        mapotherfontsize=mapotherfontsize,
                        mapcohortsize=mapcohortsize)
 
-#Todo nonshiny code check FC p value gal6phos = 0.22 without fraction??
 
 # debug(corFC_addUnlab)
 # undebug(corFC_addUnlab)
