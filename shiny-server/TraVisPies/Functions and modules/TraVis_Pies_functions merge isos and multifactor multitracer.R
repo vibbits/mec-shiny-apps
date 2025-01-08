@@ -237,32 +237,6 @@ read_dollysheet_to_long<-function(excelfile,sheetname,datatypename,lib_tb=NULL,m
   return(excelclean)
 }
 
-# function for loading and cleaning measurement data
-read_csv_clean<- function(file,remove_empty=FALSE,perc_to_num=T,
-                          remove_rowempty=FALSE,
-                          clean_underscores=T){
-  input_tb<-vroom::vroom(file = file, delim = ",",show_col_types = FALSE)
-    
-  #drop empty columns and rows if desired
-  if (remove_empty) {
-    input_tb<-select_if(input_tb,has_data)          
-  }
-  
-  if (remove_rowempty) {
-    input_tb<-input_tb %>% na.omit()          
-  }
-  
-  #set percentage strings to fractions if desired
-  if (perc_to_num){
-    percolumns<-grep("%",input_tb)
-
-
-    input_tb<-mutate(input_tb,across(all_of(percolumns),function(x) 
-      as.numeric(sub(pattern="%", replacement = "",x,fixed = T))/100))
-  }
-  return(input_tb)
-}
-
 data_to_long<-function(data,
                        datatypename=c("Abund","normAbund","FracCont",
                                       "Isotopologues"),lib_tb=NULL,meta_tb)
@@ -298,104 +272,83 @@ check_iso_input<-function(tb){
 }
 
 #extract metadata from an excel sheet
-extract_excel_metatb<-function(excelpath,sheetnamestring="meta",samplename="Sample"){
+extract_excelsheet_tb<-function(excelpath,sheetnamestring,datatype_intended,
+                                samplename="Sample"){
   sample_symbol<-rlang::sym(samplename)
   
-  metasheetname<-excel_sheets(excelpath)[
+  sheetname<-excel_sheets(excelpath)[
     which(grepl(sheetnamestring,tolower(excel_sheets(excelpath))))]
-  if(length(metasheetname)==0) {
-    stop(paste0("No sheets with metadata, add a metadata sheet with ",
-                 sheetnamestring," in its name."))
+  if(length(sheetname)==0) {
+    stop(paste0("No sheets with sheetnamestring in its name."))
   }
-  if(length(metasheetname)>1) {
-    print(paste0("Multiple potential metadata sheets, took first sheet with ",
-          sheetnamestring," in its name."))
-    metasheetname<-metasheetname[1]
+  if(length(sheetname)>1) {
+    print(paste0("Multiple sheets with ",
+                 sheetnamestring," in their name, took first."))
+    sheetname<-sheetname[1]
   }
-  print(paste0("Name of sheet used for metadata: ",metasheetname))
+  if(length(datatype_intended)>0) {
+    print(paste0("Name of sheet used for ",datatype_intended,
+                 ": ",sheetname))
+  } else print(paste0("Name of sheet used: ",sheetname))
   
-  #read excelsheet, rename sample column, remove empty columns
-  read_excel(excelpath,metasheetname)%>%
-    rename(!!sample_symbol:=1)%>%
-    select(where(~ !all(is.na(.))))
+  
+  #read excelsheet, rename sample column
+  read_excel(excelpath,sheetname)%>%
+    rename(!!sample_symbol:=1)
 }
 
 #function to prepare metadata to uniform format
 format_metadata<-function(meta_tb,sample_column,factor_columns,norm_column=NULL,
                           tracer_column="Labeling",sampletype_column) {
-  sample_symbol<-rlang::sym(sample_column)
-  tracer_symbol<-rlang::sym(tracer_column)
-  sampletype_symbol<-rlang::sym(sampletype_column)
-  fact_symbols<-rlang::syms(factor_columns)
+  #check if sample column name provided, and remove all empty columns 
+  #set most metadata types to character if they exist, except factor columns 
+  #which can be set to factor and normalisation column which is set to numeric
+  if(length(sample_column)==1) {
+    sample_symbol<-rlang::sym(sample_column)
+    meta_tb<-mutate(meta_tb,
+                    !!sample_symbol := as.character(!!sample_symbol)
+                    )%>%
+      select(where(~ !all(is.na(.))))
+  } else stop("Single sample column name needs to be provided in sample_column")
+  
+  if(length(tracer_column)==1) {
+    tracer_symbol<-rlang::sym(tracer_column)
+    meta_tb<-mutate(meta_tb,
+                    !!tracer_symbol := as.character(!!tracer_symbol),
+    )
+  } else tracer_symbol<-NULL
+  
+  if(length(sampletype_column)==1) {
+    sampletype_symbol<-rlang::sym(sampletype_column)
+    meta_tb<-mutate(meta_tb,
+                    !!sampletype_symbol := as.character(!!sampletype_symbol),
+    )
+  } else sampletype_symbol<-NULL
   
   if (length(factor_columns)>2) {
     stop("At most 2 factor variables can be specified in TraVis Pies")
-  }
-  
-  #check normalisation, drop Normalisation column if exists but not selected
-  #add dummy if no normalisation required, otherwise rename correct column
-  if(length(norm_column)==0) norm_column<-"None"
-  
-  if ("Normalisation" %in% colnames(meta_tb) & norm_column != "Normalisation") {
-    meta_tb<-select(meta_tb,-Normalisation)
-  }
-  if (norm_column == "None") {
-    meta_tb$Normalisation<-1
-  } else {
-    #rename normalisation variable, replace missing normalisation values by 1, 
-    #assuming it meant no normalisation needed
-    meta_tb<-rename(meta_tb,Normalisation=all_of(norm_column))%>%
-      mutate(Normalisation=if_else(is.na(Normalisation),
-                                   1,
-                                   Normalisation))
-  }
-  
-  #check tracer column presence. If not there, add dummytracer as tracer name,
-  #setting all levels to Labeled
-  #in case there is fraccon or not this will function accordingly
-  if (!tracer_column %in% colnames(meta_tb)) {
-    print("Either only one tracer nutrient was used or the column specifying the nutrient is missing. Assuming only one tracer nutrient was used.")
-    meta_tb[,tracer_column]<-"Labeled"
-  }
-  
-  #check factor column, add dummy if no factors given
-  if (factor_columns[1]=="None" ) {
-    meta_tb$Cohort<-"SingleCohort"
-    factor_columns<-"Cohort"
-    fact_symbol<-rlang::sym(factor_columns)
-  }
-  
-  #Order columns, drop all unrequired columns and set type
-  #factor set to single type if None, or use pull for as.factor 
-  #best use := to use !! demasking environmental variable as name 
-  #(as_factor might also work but I had issues and dropped it)
-  #drop normalisation column if dummy
-  if (length(factor_columns)==2){
+  } else if(length(factor_columns)==2) {
+    fact_symbols<-rlang::syms(factor_columns)
     meta_tb<-mutate(meta_tb,
-                    !!sample_symbol := as.character(!!sample_symbol),
-                    !!fact_symbols[[1]] := as.character(!!fact_symbols[[1]]),
-                    !!fact_symbols[[2]] := as.character(!!fact_symbols[[2]]),
-                    Normalisation=as.numeric(Normalisation),
-                    !!tracer_symbol := as.character(!!tracer_symbol),
-                    !!sampletype_symbol := as.character(!!sampletype_symbol)
-                    ) 
-                       
-  } else {
-    meta_tb<-mutate(meta_tb,
-                       !!sample_symbol := as.character(!!sample_symbol),
-                       !!fact_symbols[[1]] := as.character(!!fact_symbols[[1]]),
-                       Normalisation=as.numeric(Normalisation),
-                       !!tracer_symbol := as.character(!!tracer_symbol),
-                       !!sampletype_symbol := as.character(!!sampletype_symbol)
+                    !!fact_symbols[[1]] := as.factor(!!fact_symbols[[1]]),
+                    !!fact_symbols[[2]] := as.factor(!!fact_symbols[[2]]),
     ) 
-                       
-  }
-    
-  meta_tb<-select(meta_tb,!!sample_symbol,!!!fact_symbols,Normalisation,
-                  !!tracer_symbol,!!sampletype_symbol)
-  if (norm_column=="None") meta_tb<-select(meta_tb,-Normalisation)
+  } else if(length(factor_columns)==1) {
+    fact_symbols<-rlang::syms(factor_columns)
+    meta_tb<-mutate(meta_tb,
+                    !!fact_symbols[[1]] := as.factor(!!fact_symbols[[1]]),
+    ) 
+  } else fact_symbols<-NULL
   
-  return(meta_tb)
+  if(length(norm_column)==1) {
+    norm_symbol<-rlang::sym(norm_column)
+    meta_tb<-mutate(meta_tb,
+                    !!norm_symbol := as.numeric(!!norm_symbol),
+    )
+  } else norm_symbol<-NULL
+    
+  meta_tb<-select(meta_tb,!!sample_symbol,!!!fact_symbols,
+                  !!tracer_symbol,!!sampletype_symbol,!!norm_symbol)
 }
 
 read_dollysheet_to_long<-function(excelfile,sheetname,datatypename=c("Abund","normAbund","FracCont","Isotopologues"),lib_tb=NULL,meta_tb) {

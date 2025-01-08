@@ -87,19 +87,17 @@ source(here::here("Functions and modules/TraVis_Pies_functions merge isos and mu
 
 #set variables to NULL or none as required by functions that might not be present in data
 #and inputtype to NULL
-comparative_factor_column<-sampletype_column<-NULL
-factor_column <- norm_column <- tracer_column<-"None"
-inputtype<-NULL  
+comparative_factor_column<-sampletype_column<-factor_column <- norm_column <- 
+  tracer_column<-inputtype<-NULL
 
 
 #test  excel with labeled data
-inputtype<-"excel"  #set to csv or excel 
 path<-here::here("Example_data/Input Excel")
 savepath<-path
 excelfile<-"example excel.xlsx"
-excelpath<-paste(path,excelfile,sep = "/")
-read_excel(excelpath,
-           which(grepl("meta",tolower(excel_sheets(excelpath)))))%>%
+inputpath<-paste(path,excelfile,sep = "/")
+read_excel(inputpath,
+           which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
                    colnames()
 sample_column <-"Sample"
 factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
@@ -108,10 +106,10 @@ sampletype_column<-"sample_type"
 
 
 #test data 1-factor no replicates
-# inputtype<-"csv"  #set to csv or excel 
+ 
 # rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Other examples for nonUI app\Bram problems 2)"
-# path<-gsub("\\\\", "/", rawpath)
-# # path<-here::here("Example_data/Original input")
+# inputpath<-path<-gsub("\\\\", "/", rawpath)
+# # inputpath<-path<-here::here("Example_data/Original input")
 # savepath<-path
 # metadatafile<-"MD.csv"
 # abundancefile<-"RA.csv"
@@ -124,10 +122,10 @@ sampletype_column<-"sample_type"
  
 
 #test data 1-factor
-# inputtype<-"csv"  #set to csv or excel 
+ 
 # rawpath<-r"(C:\Users\u0134881\Documents\R\Create figures\Pie charts\Pie charts inputfiles\Pie charts 1factor)"
-# path<-gsub("\\\\", "/", rawpath)
-# path<-here::here("Example_data/Original input")
+# inputpath<-path<-gsub("\\\\", "/", rawpath)
+# inputpath<-path<-here::here("Example_data/Original input")
 # savepath<-path
 # metadatafile<-"Input_Example_metadata.csv"
 # abundancefile<-"Input_Example_RA.csv"
@@ -140,10 +138,10 @@ sampletype_column<-"sample_type"
 
 
 #test data 1-factor iso input
-# inputtype<-"csv"  #set to csv or excel
+
 # rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Crashes)"
-# path<-gsub("\\\\", "/", rawpath)
-# path<-here::here("Example_data/Original input")
+# inputpath<-path<-gsub("\\\\", "/", rawpath)
+# inputpath<-path<-here::here("Example_data/Original input")
 # savepath<-path
 # metadatafile<-"Input_Example_metadata.csv"
 # abundancefile<-"Input_Example_RA.csv"
@@ -153,10 +151,10 @@ sampletype_column<-"sample_type"
 
 
 #test data 2-factor
-# inputtype<-"csv"  #set to csv or excel
+
 # rawpath<-r"(D:\Documents\GitHub\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Experimental examples for nonUI app\Pie charts 2factor)"
-# path<-gsub("\\\\", "/", rawpath)
-# path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor")
+# inputpath<-path<-gsub("\\\\", "/", rawpath)
+# inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor")
 # savepath<-path
 # metadatafile<-"2factorpies_metadata.csv"
 # abundancefile<-"2factorpies_RA.csv"
@@ -171,10 +169,10 @@ sampletype_column<-"sample_type"
 
 
 #test data 1-factor different tracers
-# inputtype<-"csv"  #set to csv or excel
+
 # rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 1 factor multitracer)"
-# path<-gsub("\\\\", "/", rawpath)
-# path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 1 factor multitracer")
+# inputpath<-path<-gsub("\\\\", "/", rawpath)
+# inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 1 factor multitracer")
 # savepath<-path
 # metadatafile<-"MCF001748,74_multitrace_metadata.csv"
 # abundancefile<-"MCF001748,74_multitrace_RA.csv"
@@ -191,10 +189,10 @@ sampletype_column<-"sample_type"
 # tracer_column <-"Tracer"                #"None" if not present
 
 #test data 2-factor different tracers
-# inputtype<-"csv"  #set to csv or excel
+
 # rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
-# path<-gsub("\\\\", "/", rawpath)
-# path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor multitracer")
+# inputpath<-path<-gsub("\\\\", "/", rawpath)
+# inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor multitracer")
 # savepath<-path
 # metadatafile<-"2factor_multitrace_metadata.csv"
 # abundancefile<-"2factor_multitrace_RA.csv"
@@ -296,11 +294,12 @@ format<-"png"
 
 #If no tracer column, make dummy column and set tracer column name to Tracer
 #then make symbol for dplyr pipelines
-if(tracer_column=="None") {
-  tracer_column<-"Labeling"
-  tracer_symbol<-rlang::sym(tracer_column)
+if(length(tracer_column)==0) {
+  tracer_symbol<-NULL
+} else {
+  tracer_symbol<-rlang::sym(tracer_column) #one symbol
 }
-tracer_symbol<-rlang::sym(tracer_column) #one symbol
+
 
 #Check how many factors supplied, make dummy if none, keep if one, keep a 
 #variable with both and separate variables if two, error if more than two
@@ -310,23 +309,54 @@ factor_columns <- c(factor_column,comparative_factor_column)
 if(length(factor_columns)==1){
   twofactor=F
   factor_symbol<-rlang::sym(factor_columns)
+  factor_symbols<-rlang::syms(factor_columns) #list of symbols
   if (exists("compar_factor_symbol")) rm("compar_factor_symbol")
 } else if(length(factor_columns)==2) {
   twofactor=T
   factor_symbol<-rlang::sym(factor_column)
   compar_factor_symbol<-rlang::sym(comparative_factor_column)
+  factor_symbols<-rlang::syms(factor_columns) #list of symbols
 } else if(length(factor_columns)==0 ) {
-  print("No factor was supplied, dummy made.")
-  factor_columns<-"None"
+  print("No factor was supplied")
+  factor_symbol<-factor_symbols<-NULL
 } else {
   if(length(factor_columns)>2 ) stop("More than two factors were supplied")
 }
-factor_symbols<-rlang::syms(factor_columns) #list of symbols
 
-#input metadata and abundance data, put in right format for following functions
-if (inputtype=="csv"){
-  meta_formatted_tb<-read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-                                    remove_empty = T) %>%
+metastring<-"meta"
+abundstring<-"abund"
+labelstring<-"iso"
+if(grepl(".xls",inputpath)) {
+  print("String `.xls` detected in ",inputpath,", expecting excelfile")
+  if (!file.exists(inputpath)) {
+    stop(paste0(inputpath," is not an existing excel file, correct or remove ",
+                "`.xls` string from inputpath if it is a path to a folder"))
+  }
+  # debug(format_metadata)
+  meta_formatted_tb<-extract_excelsheet_tb(inputpath,
+                                          sheetnamestring = metastring,
+                                          datatype_intended = "metadata",
+                                          samplename = "Sample")%>%
+    format_metadata(sample_column = sample_column,
+                    factor_columns = factor_columns,
+                    norm_column = norm_column,
+                    tracer_column=tracer_column,
+                    sampletype_column=sampletype_column)
+  
+  abund_tb<-extract_excelsheet_tb(inputpath,
+                                  sheetnamestring = abundstring,
+                                  datatype_intended = "abundance data",
+                                  samplename = "Sample")  
+  
+  #todo continue from here load isotb, do checks,store as list, then use 
+  #different functionto turn list into long tb
+  
+  inputlist<-list(meta_tb=meta_formatted_tb)
+  
+} else if(dir.exists(inputpath)) {
+  meta_formatted_tb<-input_tb<-vroom::vroom(file = paste(path,metadatafile,sep = "/"),
+                                            delim = ",",
+                                            show_col_types = FALSE)%>%
     format_metadata(sample_column = sample_column,
                     factor_columns = factor_columns,
                     norm_column = norm_column,
@@ -342,15 +372,18 @@ if (inputtype=="csv"){
   } else {
     iso_tb<-NULL
   }
+} else stop(paste0(inputpath ,"not found. Please specify an existing folder or ",
+                   "excel file. For the latter, make sure the path contains ",
+                   "the string `.xls` somehwere, like ",
+                   "examplefolder/examplefile.xlsx"))
+
+#input metadata and abundance data, put in right format for following functions
+if (inputtype=="csv"){
+  
 } else if (inputtype=="excel") {
 
   #extract excelsheet and format metadata
-  meta_formatted_tb<-extract_excel_metatb(excelpath)%>%
-    format_metadata(sample_column = sample_column,
-                    factor_columns = factor_columns,
-                    norm_column = norm_column,
-                    tracer_column=tracer_column,
-                    sampletype_column=sampletype_column)
+  
 } else stop("inputtype must be `excel`or `csv`")
 
 #todo continue making function work, but consider doing first quick cleaning
@@ -365,10 +398,10 @@ samplename<-"Sample"
 sample_symbol<-rlang::sym(samplename)
 sampletype_symbol<-rlang::sym(sampletype_column)
 sheetnamestring<-"abund"
-sheetname<-excel_sheets(excelpath)[
-  which(grepl(sheetnamestring,tolower(excel_sheets(excelpath))))]
+sheetname<-excel_sheets(inputpath)[
+  which(grepl(sheetnamestring,tolower(excel_sheets(inputpath))))]
 
-excel_tb <- read_excel(excelpath,sheetname)
+excel_tb <- read_excel(inputpath,sheetname)
 
 lib_tb<-NULL
 datatypename<-"Abund"
