@@ -16,6 +16,7 @@ library(vroom)        #for easier file loading
 library(forcats)      #for factor manipulation
 library(readr)        #for writing .csv file of merged output
 library(tidyr)        #for restructuring data tibbles
+library(stringr)       #for padding leading zeros to isotopologue strings
 library(ggplot2)      #for generating the pie chart plots
 library(ggrepel)      #for avoiding overlapping FC labels in multitracer plots
 
@@ -74,10 +75,6 @@ check_install_fonts<-function(import_dir=NULL) {
   
 }
 
-
-# function for checking if any column cell contains non-NA data
-has_data <- function(x) { sum(!is.na(x)) > 0 } 
-
 # function for checking if any column cell is different from 0
 has_nonzero <- function(x) { any(x != 0)}         
 
@@ -106,152 +103,9 @@ replace_except_last <- function(input_strings, to_replace = "_", replacement = "
   sapply(input_strings, replace_single_string)
 }
 
-#reads in an abundance, fractional contribution or isotopologue sheet of a 
-#dolly excel file by name,and prepares the desired table from it
-read_dollysheet_to_long<-function(excelfile,sheetname,datatypename,lib_tb=NULL,meta_tb) {
-  #read excel sheet data, if derivatized change names to underivatized
-  excel_tb <- read_excel(excelfile,sheetname)
-  # excel_tb <- read_excel(excelfile,"correctedIsotopologues_C13")
-  
-  if(any(colnames(lib_tb)=="Orig_name")) {
-    for(i in 1:nrow(lib_tb)){
-      colnames(excel_tb)<-sub(lib_tb$compound[i],
-                              lib_tb$Orig_name[i],
-                              colnames(excel_tb),
-                              fixed = T)
-    }  
-  }
-  
-  #replace all but last _ in isotopologe compound names for easy 
-  #substringing later. To match names, make sure to replace all _ in 
-  #non-isotopologue compound names
-  if (grepl("isotopologue",tolower(sheetname))) {
-    colnames(excel_tb)<-replace_except_last(colnames(excel_tb))
-  } else {
-    colnames(excel_tb)<-gsub("_"," ",colnames(excel_tb))
-  }
-  
-  
-  #detect internal standards in sheet
-  headers<-excel_tb %>% 
-    select(where(~ all(is.na(.)))) %>%
-    colnames()
-  
-  if (length(headers[which(grepl("internal",tolower(headers)))])>0) {
-    intstdfirstcol<-which(colnames(excel_tb) ==
-                            headers[which(grepl("internal",
-                                                tolower(headers)))][1])+1
-    intstdlastcol<-which(colnames(excel_tb) ==
-                           headers[which(grepl("internal",
-                                               tolower(headers)))+1][1])-1
-    intstds<-colnames(excel_tb)[intstdfirstcol:intstdlastcol]
-  } else {
-    intstds<-NULL
-  }  
-  
-  #remove empty rows and columns and check if abundance sheet for specific actions to 
-  #take with it. Convert data to long format if not done before.
-  excelclean <- excel_tb %>% 
-    select(where(~ !all(is.na(.))))%>%
-    na.omit()%>%
-    rename(sample=1)
-  
-  long_format<-F
-  if (grepl("abundance",tolower(sheetname))){
-    
-    #if LOD in sheet calculate LOD and average blank from supposed mock samples,
-    #and remove these samples from the abundance sheet. Set blank and LOD to 0
-    #for internal standards.
-    #then remove rows that contain blanks, lod from sheet, subtract 
-    #blank and add LOD and above LOD term to each compound-sample combination, 
-    #and keep both blank uncorrected and corrected abundances and LOD.
-    if (any(tolower(meta_tb$sample_type)=="blank")) {
-      blanks_tb<-excelclean %>%
-        filter(sample %in% c(meta_tb %>%
-                               filter(tolower(meta_tb$sample_type)=="blank")%>%
-                               pull(sample))) %>%
-        pivot_longer(cols = 2:ncol(.),
-                     names_to = "compound", 
-                     values_to= "abundance")%>%
-        group_by(compound)%>%
-        summarise(av_blank=mean(abundance),
-                  LOD=av_blank+3*sd(abundance))%>%
-        mutate(
-          av_blank=if_else(compound %in% intstds,0,av_blank),
-          LOD=if_else(compound %in% intstds,0,LOD)
-        )
-      excelclean <- excelclean %>%
-        pivot_longer(cols = 2:ncol(.),
-                     names_to = "compound", 
-                     values_to= "abundance")%>%
-        left_join(blanks_tb, by=join_by(compound))%>%
-        mutate(ab_blankcor=abundance-av_blank,
-               LOD_blankcor=LOD-av_blank,
-               detected=abundance>LOD) %>%
-        pivot_longer(cols = c("abundance","ab_blankcor"),
-                     names_to = "datatype", 
-                     values_to= "value") %>%
-        select(sample,compound,datatype,value,LOD,LOD_blankcor,detected)%>%
-        filter(!sample %in% c(meta_tb %>%
-                                filter(tolower(meta_tb$sample_type)=="blank")%>%
-                                pull(sample)),
-               !grepl("lod",tolower(sample)))
-      
-      long_format<-T
-    } else {
-      #if no mocks, don't do blank correction
-      print(paste0("No samples indicated as blank in metadata column sample , ",
-                   "type. Assumed no LOD calculation or blank correction needed"))
-    }
-  } else {
-    #remove internal standard columns and mock samples for data other than
-    #abundance
-    excelclean<-excelclean %>%
-      select(-any_of(intstds)) %>%
-      filter(!sample %in% c(meta_tb %>%
-                              filter(tolower(meta_tb$sample_type)=="blank")%>%
-                              pull(sample)))
-  }
-  
-  #get data in long format if still needed, for corrected isotopologues
-  #make one entry per isotopologue
-  if (!long_format) {
-    excelclean<-excelclean%>%
-      pivot_longer(2:ncol(.),names_to = "compound")%>%
-      mutate(datatype=datatypename) %>%
-      mutate(
-        datatype=if_else(
-          grepl("isotopologue",tolower(datatype)),
-          paste0(datatype,substr(compound,regexpr("_",compound,fixed = T),
-                                 nchar(compound))),
-          datatype),
-        compound=if_else(
-          grepl("isotopologue",tolower(datatype)),
-          substr(compound,1,regexpr("_",compound,fixed = T)-1),
-          compound)
-      )
-    
-    long_format<-T
-  }
-  
-  return(excelclean)
-}
 
-data_to_long<-function(data,
-                       datatypename=c("Abund","normAbund","FracCont",
-                                      "Isotopologues"),lib_tb=NULL,meta_tb)
 #function to check escher-trace like corrected isotopologue input data
 #returns "OK" if all checks are passed, error message otherwise
-# tb<-read_csv_clean("~/GitHub/mec-shiny-apps/shiny-server/TraVisPies/Example_data/Input_Example_Isotopologues.csv",
-#                         remove_empty = F,perc_to_num = F)
-# head(tb)
-# check_iso_input(tb)
-# modtb<-tb
-# modtb[2,2]<-"Abundance"
-# head(modtb)
-# check_iso_input(modtb)
-# any(i(filter(modtb,Fragment=="Abundance")$Metabolite)==0)# debug(check_iso_input)
-
 check_iso_input<-function(tb){
   if (colnames(tb)[1]!= "Metabolite") return(
     paste0("The first column in the isotopologue input should be named ",
@@ -271,10 +125,30 @@ check_iso_input<-function(tb){
   return("OK")
 }
 
+#function that return a symbol or a symbol list from a value, length >1, or 
+#NULL if NULL was provided
+sym_or_null<-function(vect,returnlist=F,allownull=T){
+  if(length(vect)>1) {
+    if(!returnlist){
+      warning(paste0("Returning symbollist instead of the requested single ",
+                   "symbol as vect contains multiple elements: ",
+                   paste0(vect, collapse= ", ")))
+      }
+    symbol<-rlang::syms(vect)
+  } else if(length(vect)==1) {
+    if (returnlist) symbol<-rlang::syms(vect) else symbol<-
+        rlang::sym(vect)
+  } else if (allownull) symbol<-NULL else {
+    stop("NULL input not allowed, check input or set allownull=T")
+  }
+  
+  return(symbol)
+}
+
 #extract metadata from an excel sheet
 extract_excelsheet_tb<-function(excelpath,sheetnamestring,datatype_intended,
                                 samplename="Sample"){
-  sample_symbol<-rlang::sym(samplename)
+  sample_symbol<-sym_or_null(samplename,allownull = F)
   
   sheetname<-excel_sheets(excelpath)[
     which(grepl(sheetnamestring,tolower(excel_sheets(excelpath))))]
@@ -298,199 +172,294 @@ extract_excelsheet_tb<-function(excelpath,sheetnamestring,datatype_intended,
 }
 
 #function to prepare metadata to uniform format
-format_metadata<-function(meta_tb,sample_column,factor_columns,norm_column=NULL,
-                          tracer_column="Labeling",sampletype_column) {
-  #check if sample column name provided, and remove all empty columns 
-  #set most metadata types to character if they exist, except factor columns 
-  #which can be set to factor and normalisation column which is set to numeric
-  if(length(sample_column)==1) {
-    sample_symbol<-rlang::sym(sample_column)
-    meta_tb<-mutate(meta_tb,
-                    !!sample_symbol := as.character(!!sample_symbol)
-                    )%>%
-      select(where(~ !all(is.na(.))))
-  } else stop("Single sample column name needs to be provided in sample_column")
+format_metadata<-function(meta_tb,sample_column,factor_columns=NULL,
+                          norm_column=NULL,tracer_column=NULL,
+                          sampletype_column=NULL) {
+  #make symbols for dplyr pipelines
+  sample_symbol<-sym_or_null(sample_column,allownull = F)
+  factor_symbols<-sym_or_null(factor_columns,returnlist = T)
+  tracer_symbol<-sym_or_null(tracer_column)
+  norm_symbol<-sym_or_null(norm_column)
+  sampletype_symbol<-sym_or_null(sampletype_column)
   
-  if(length(tracer_column)==1) {
-    tracer_symbol<-rlang::sym(tracer_column)
-    meta_tb<-mutate(meta_tb,
-                    !!tracer_symbol := as.character(!!tracer_symbol),
-    )
-  } else tracer_symbol<-NULL
-  
-  if(length(sampletype_column)==1) {
-    sampletype_symbol<-rlang::sym(sampletype_column)
-    meta_tb<-mutate(meta_tb,
-                    !!sampletype_symbol := as.character(!!sampletype_symbol),
-    )
-  } else sampletype_symbol<-NULL
-  
-  if (length(factor_columns)>2) {
-    stop("At most 2 factor variables can be specified in TraVis Pies")
-  } else if(length(factor_columns)==2) {
-    fact_symbols<-rlang::syms(factor_columns)
-    meta_tb<-mutate(meta_tb,
-                    !!fact_symbols[[1]] := as.factor(!!fact_symbols[[1]]),
-                    !!fact_symbols[[2]] := as.factor(!!fact_symbols[[2]]),
-    ) 
-  } else if(length(factor_columns)==1) {
-    fact_symbols<-rlang::syms(factor_columns)
-    meta_tb<-mutate(meta_tb,
-                    !!fact_symbols[[1]] := as.factor(!!fact_symbols[[1]]),
-    ) 
-  } else fact_symbols<-NULL
-  
-  if(length(norm_column)==1) {
-    norm_symbol<-rlang::sym(norm_column)
-    meta_tb<-mutate(meta_tb,
-                    !!norm_symbol := as.numeric(!!norm_symbol),
-    )
-  } else norm_symbol<-NULL
-    
-  meta_tb<-select(meta_tb,!!sample_symbol,!!!fact_symbols,
-                  !!tracer_symbol,!!sampletype_symbol,!!norm_symbol)
+  #set right column types and keep only desired columns, if existing
+  meta_tb<-mutate(meta_tb,
+                  across(
+                    c(!!sample_symbol,!!tracer_symbol,!!sampletype_symbol),
+                    as.character),
+                  across(
+                    !!norm_symbol,
+                    as.numeric),
+                  across(
+                    !!!factor_symbols,
+                    as.factor)
+                  )%>%
+    select(where(~ !all(is.na(.))),!!sample_symbol,!!!factor_symbols,
+           !!tracer_symbol,!!sampletype_symbol,!!norm_symbol)
 }
 
-read_dollysheet_to_long<-function(excelfile,sheetname,datatypename=c("Abund","normAbund","FracCont","Isotopologues"),lib_tb=NULL,meta_tb) {
-  #read excel sheet data, if derivatized change names to underivatized
-  excel_tb <- read_excel(excelfile,sheetname)
-  # excel_tb <- read_excel(excelfile,"correctedIsotopologues_C13")
+#look for .csv file containing string in folder
+loadfile_stringmatch<-function(path,filestring){
+  #get .csv files that contain filestring
+  filelist<-list.files(path)
+  filelist<-filelist[which(grepl(".csv",filelist,fixed=T))]
+  matchedfiles<-filelist[which(grepl(filestring,filelist,fixed=T))]
+  if(length(matchedfiles)>1) {
+    warning(paste0("Multiple .csv files contain the string `",filestring,
+                 "`. Only the first of these wille be used: ",
+                 paste0(matchedfiles,collapse=", ")))
+  } else if (length(matchedfiles)==0) {
+    stop(paste0("None of the .csv files in this folder contain the string `",
+                filestring,"`. .csv files in this folder: ",
+                paste0(filelist,collapse=", ")))
+  }
   
-  if(any(colnames(lib_tb)=="Orig_name")) {
+  vroom::vroom(file = paste0(path,"/",matchedfiles[1]),
+               delim = ",",show_col_types = FALSE)
+}
+
+#detect if labeling is isotopologues or fractional contribution,
+#sanitazing metabolite names as required for later functions depending on
+#labeling type
+is_isodata<-function(label_tb,isostring){
+  isocols<-colnames(label_tb)[
+    grepl(tolower(isostring),tolower(colnames(label_tb)))]
+  if(length(isocols)>0){
+    print(paste0("The isotopologuestring `",isostring,"` was detected in ",
+                 "these columns (max first 10 shown): ",
+                 paste0(isocols[1:min(10,length(isocols))],collapse = ", "),
+                 "."))
+    print(paste0("If this is fractional contribution data, set isostring to ",
+                 "a different string not present in metabolite names to avoid ",
+                 "errors."))
+    is_tb_isodata<-T
+  } else {
+    print(paste0("The isostring `",isostring,"` is not found ",
+                 "in any column names in the labeling tb, ",
+                 "assuming this is fractional contribution ",
+                 "data. If this is isotoplogue data, set ",
+                 "isostring to a different string unique ",
+                 "to isotopologue names to avoid errors"))
+    is_tb_isodata<-F
+  }
+  
+  return(is_tb_isodata)
+}
+
+#rename compounds in colnames (incl isotopologue data) based on library
+#ideal to rename derivatised compounds to the original compound
+rename_lib<-function(data_tb,lib_tb=NULL,currentnamecol="compound",
+                     newnamecol="Orig_name"){
+  if(length(lib_tb)==0) {
+    print("No library provided, using compound names as they are in input")
+    return(data_tb)
+  }
+  
+  if(any(colnames(lib_tb)==currentnamecol)&
+     any(colnames(lib_tb)==newnamecol)) {
     for(i in 1:nrow(lib_tb)){
-      colnames(excel_tb)<-sub(lib_tb$compound[i],
-                              lib_tb$Orig_name[i],
-                              colnames(excel_tb),
+      colnames(data_tb)<-sub(lib_tb[i,currentnamecol],
+                              lib_tb[i,newnamecol],
+                              colnames(data_tb),
                               fixed = T)
     }  
-  }
+  } else warning(paste0("Renaming requested by naming columns not found in ",
+                        "library, continue without renaming"))
   
-  #replace all but last _ in isotopologe compound names for easy 
-  #substringing later. To match names, make sure to replace all _ in 
-  #non-isotopologue compound names
-  if (grepl("isotopologue",tolower(sheetname))) {
-    colnames(excel_tb)<-replace_except_last(colnames(excel_tb))
+  return(data_tb)
+}
+
+#check inputpath to see if leading to excel or folder, import meta, abundance,
+#and labeling data accordingly, and return a list of these three datasets as
+#tibble
+list_inputdata_tbs<-function(inputpath,metastring="meta",abundstring="abund",
+                             labelstring="iso",isostring="parent",sample_column,
+                             factor_columns=NULL,
+                             norm_column=NULL,tracer_column=NULL,
+                             sampletype_column=NULL,
+                             lib_tb=NULL){
+  
+  
+  #correctly load in data depending on path being excel or folder
+  if(grepl(".xls",inputpath)) {
+    print(
+      paste0("String `.xls` detected in ",inputpath,", expecting excelfile"))
+    if (!file.exists(inputpath)) {
+      stop(paste0(inputpath," is not an existing excel file, correct or remove ",
+                  "`.xls` string from inputpath if it is a path to a folder"))
+    }
+    # debug(format_metadata)
+    meta_tb<-extract_excelsheet_tb(inputpath,
+                                             sheetnamestring = metastring,
+                                             datatype_intended = "metadata",
+                                             samplename = sample_column)
+    
+    abund_tb<-extract_excelsheet_tb(inputpath,
+                                    sheetnamestring = abundstring,
+                                    datatype_intended = "abundance data",
+                                    samplename = sample_column)
+    
+    label_tb<-extract_excelsheet_tb(inputpath,
+                                    sheetnamestring = labelstring,
+                                    datatype_intended = "labeling data",
+                                    samplename = sample_column)
+    
+    
+    
+    
+  } else if(dir.exists(inputpath)) {
+    meta_tb<-loadfile_stringmatch(inputpath,metastring)
+    abund_tb<-loadfile_stringmatch(inputpath,abundstring)
+    label_tb<-loadfile_stringmatch(inputpath,labelstring)
+    
+  } else stop(paste0(inputpath ,"not found. Please specify an existing folder or ",
+                     "excel file. For the latter, make sure the path contains ",
+                     "the string `.xls` somehwere, like ",
+                     "examplefolder/examplefile.xlsx"))
+  
+  #start list with formatted metadata and abundance data with sanitized
+  #metabolite names (e.g. removing "_" from metabolite names to avoid 
+  #confusion with isotopologues). Remove empty columns and rows too.
+  #rename compounds by library if provided
+  output_list<-list(meta_tb=meta_tb%>%
+                      format_metadata(sample_column = sample_column,
+                                      factor_columns = factor_columns,
+                                      norm_column = norm_column,
+                                      tracer_column=tracer_column,
+                                      sampletype_column=sampletype_column),
+                    abund_tb=abund_tb%>%
+                      rename_lib(lib_tb)%>%
+                      rename_with(~gsub("_"," ",.x))%>%
+                      select(where(~ !all(is.na(.))))%>%
+                      na.omit()
+  )
+  
+  #clean labeling data to remove empty rows and columns, and make sure
+  #labeling is a numerical fraction in case input is a % character
+  #rename compounds by library if provided
+  label_tb<-label_tb%>%
+    select(where(~ !all(is.na(.))))%>%
+    na.omit()%>%
+    mutate(across(where(~any(grepl("%",.x,fixed=T))),function(x) 
+      as.numeric(sub(pattern="%", replacement = "",x,fixed = T))/100))%>%
+    rename_lib(lib_tb)
+  
+  #rename labeling data to FC or iso and clean names accordingly depending on
+  #whether an isotopologue string is found in the column names
+  if(is_isodata(label_tb,isostring = isostring)) {
+    output_list$iso_tb<-label_tb %>%
+      rename_with(replace_except_last)
   } else {
-    colnames(excel_tb)<-gsub("_"," ",colnames(excel_tb))
+    output_list$frac_tb<-label_tb %>%
+      rename_with(~gsub("_"," ",.x))
   }
-  
+  return(output_list)
+}
+
+#reads in an abundance, fractional contribution or isotopologue sheet of a 
+#dolly excel file by name,and prepares the desired table from it
+curate_abundancedata<-function(abund_tb,meta_tb,sample_column,sampletype_column,
+                               norm_column) {
+  sample_symbol<-sym_or_null(sample_column)
+  sampletype_symbol<-sym_or_null(sampletype_column)
+  norm_symbol<-sym_or_null(norm_column)
   
   #detect internal standards in sheet
-  headers<-excel_tb %>% 
+  headers<-abund_tb %>% 
     select(where(~ all(is.na(.)))) %>%
     colnames()
   
   if (length(headers[which(grepl("internal",tolower(headers)))])>0) {
-    intstdfirstcol<-which(colnames(excel_tb) ==
+    intstdfirstcol<-which(colnames(abund_tb) ==
                             headers[which(grepl("internal",
                                                 tolower(headers)))][1])+1
-    intstdlastcol<-which(colnames(excel_tb) ==
+    intstdlastcol<-which(colnames(abund_tb) ==
                            headers[which(grepl("internal",
                                                tolower(headers)))+1][1])-1
-    intstds<-colnames(excel_tb)[intstdfirstcol:intstdlastcol]
+    intstds<-colnames(abund_tb)[intstdfirstcol:intstdlastcol]
   } else {
     intstds<-NULL
   }  
   
   #remove empty rows and columns and check if abundance sheet for specific actions to 
   #take with it. Convert data to long format if not done before.
-  excelclean <- excel_tb %>% 
+  abund_cleantb <- abund_tb %>% 
     select(where(~ !all(is.na(.))))%>%
-    na.omit()%>%
-    rename(sample=1)
+    na.omit()
   
-  long_format<-F
-  if (grepl("abundance",tolower(sheetname))){
-    
-    #if LOD in sheet calculate LOD and average blank from supposed mock samples,
-    #and remove these samples from the abundance sheet. Set blank and LOD to 0
-    #for internal standards.
-    #then remove rows that contain blanks, lod from sheet, subtract 
-    #blank and add LOD and above LOD term to each compound-sample combination, 
-    #and keep both blank uncorrected and corrected abundances and LOD.
-    if (any(tolower(meta_tb$sample_type)=="blank")) {
-      blanks_tb<-excelclean %>%
-        filter(sample %in% c(meta_tb %>%
-                               filter(tolower(meta_tb$sample_type)=="blank")%>%
-                               pull(sample))) %>%
-        pivot_longer(cols = 2:ncol(.),
-                     names_to = "compound", 
-                     values_to= "abundance")%>%
-        group_by(compound)%>%
-        summarise(av_blank=mean(abundance),
-                  LOD=av_blank+3*sd(abundance))%>%
-        mutate(
-          av_blank=if_else(compound %in% intstds,0,av_blank),
-          LOD=if_else(compound %in% intstds,0,LOD)
-        )
-      excelclean <- excelclean %>%
-        pivot_longer(cols = 2:ncol(.),
-                     names_to = "compound", 
-                     values_to= "abundance")%>%
-        left_join(blanks_tb, by=join_by(compound))%>%
-        mutate(ab_blankcor=abundance-av_blank,
-               LOD_blankcor=LOD-av_blank,
-               detected=abundance>LOD) %>%
-        pivot_longer(cols = c("abundance","ab_blankcor"),
-                     names_to = "datatype", 
-                     values_to= "value") %>%
-        select(sample,compound,datatype,value,LOD,LOD_blankcor,detected)%>%
-        filter(!sample %in% c(meta_tb %>%
-                                filter(tolower(meta_tb$sample_type)=="blank")%>%
-                                pull(sample)),
-               !grepl("lod",tolower(sample)))
-      
-      long_format<-T
-    } else {
-      #if no mocks, don't do blank correction
-      print(paste0("No samples indicated as blank in metadata column sample , ",
-                   "type. Assumed no LOD calculation or blank correction needed"))
-    }
-  } else {
-    #remove internal standard columns and mock samples for data other than
-    #abundance
-    excelclean<-excelclean %>%
-      select(-any_of(intstds)) %>%
-      filter(!sample %in% c(meta_tb %>%
-                              filter(tolower(meta_tb$sample_type)=="blank")%>%
-                              pull(sample)))
+  #if blanks are present in metadata
+  blankspresent<-F
+  if (length(sampletype_column)>0) {
+    if(any(tolower(pull(meta_tb,!!sampletype_symbol))=="blank")) blankspresent<-T
   }
-  
-  #get data in long format if still needed, for corrected isotopologues
-  #make one entry per isotopologue
-  if (!long_format) {
-    excelclean<-excelclean%>%
-      pivot_longer(2:ncol(.),names_to = "compound")%>%
-      mutate(datatype=datatypename) %>%
+  if(blankspresent) {
+    
+    #calculate LOD and average blank from blanks samples, Set blank and LOD to 0
+    #for internal standards
+    blanks_tb<-abund_cleantb %>%
+      filter(!!sample_symbol %in% c(meta_tb %>%
+                                      filter(tolower(
+                                        pull(meta_tb,!!sampletype_symbol))=="blank")%>%
+                                      pull(!!sample_symbol))) %>%
+      pivot_longer(cols = 2:ncol(.),
+                   names_to = "compound", 
+                   values_to= "Abund")%>%
+      group_by(compound)%>%
+      summarise(av_blank=mean(Abund),
+                LOD=av_blank+3*sd(Abund))%>%
       mutate(
-        datatype=if_else(
-          grepl("isotopologue",tolower(datatype)),
-          paste0(datatype,substr(compound,regexpr("_",compound,fixed = T),
-                                 nchar(compound))),
-          datatype),
-        compound=if_else(
-          grepl("isotopologue",tolower(datatype)),
-          substr(compound,1,regexpr("_",compound,fixed = T)-1),
-          compound)
+        av_blank=if_else(compound %in% intstds,0,av_blank),
+        LOD=if_else(compound %in% intstds,0,LOD)
       )
     
-    long_format<-T
+    #join blank and LOD data to the abundance data, do blank correction
+    #and check if compound above LOD. Then remove rows for blanks and LOD from 
+    #abundance data.
+    abund_cleantb <- abund_cleantb %>%
+      pivot_longer(cols = 2:ncol(.),
+                   names_to = "compound", 
+                   values_to= "Abund")%>%
+      left_join(blanks_tb, by=join_by(compound))%>%
+      right_join(meta_tb%>%
+                   select(!!sample_symbol,!!sampletype_symbol,!!norm_symbol),
+                 join_by(!!sample_symbol))%>%
+      mutate(BlankcorAbund=Abund-av_blank,
+             LOD_blankcor=LOD-av_blank,
+             detected=Abund>LOD)%>% 
+    pivot_longer(cols = c("Abund","BlankcorAbund"),
+                 names_to = "datatype", 
+                 values_to= "value") %>%
+      select(!!sample_symbol,!!sampletype_symbol,!!norm_symbol,compound,datatype,value,LOD,LOD_blankcor,
+             detected)%>%
+      filter(!!sampletype_symbol!="blank",
+             !grepl("lod",tolower(!!sample_symbol)))%>%
+      pivot_wider(names_from = datatype,values_from = value)
+  } else {
+    #if no mocks, don't do blank correction
+    print(paste0("No samples indicated as blank in metadata column sampletype ",
+                 ". Assumed no LOD calculation or blank correction needed"))
+    abund_cleantb <- abund_cleantb %>%
+      pivot_longer(cols = 2:ncol(.),
+                   names_to = "compound", 
+                   values_to= "Abund")%>%
+      right_join(meta_tb%>%
+                   select(!!sample_symbol,!!norm_symbol),
+                 join_by(!!sample_symbol))
   }
   
-  return(excelclean)
-}
-
-#function to check which elements are common among all vectors
-get_common_elements<-function(...){
-  #list all input objects, check if all elements are vectors
-  vectorlist<-list(...)
-  for(i in vectorlist) {
-    if (!is.atomic(i)) stop(paste0(i," is not an atomic vector. "))
-    if (is.matrix((i))) stop(paste0(i," is a matrix, not an atomic vector."))
+  #if norm_column is not null, add normalized data based on blank corrected
+  #if available, not blank corrected if not
+  if(length(norm_column)>0) {
+    abund_cleantb<-abund_cleantb%>%
+      {
+        if("BlankcorAbund" %in% colnames(.)){
+          mutate(.,NormAbund=BlankcorAbund/!!norm_symbol)
+        } else {
+          mutate(.,NormAbund=Abund/!!norm_symbol)
+        }
+      }
   }
-  
-  #obtain elements common to all vectors in list
-  Reduce(intersect, vectorlist)
+  return(abund_cleantb)
 }
 
 #transpose tibble, setting colnames to first column and first column to colnames
@@ -509,36 +478,34 @@ t_tibble<-function(tb,first_colname="first_column"){
 }
 
 #Extract rowwise isotopologue data from columnwise corrected isotopologue
-#file, for faster fractional contribution calculation and generation of 
-#summarized isotopologue text for later
+#file, to use for calculating fraccon and making long tibble
 #specify correct isotopologue suffix separator, character used to separate the 
 #metabolite name from the isotopologue label in the input isotopologue
-#column names. This character can be used in metabolite name withotu issue, but 
-#not in the isotopologue label
+#column names. This character can no be present in the metabolite name or  
+#isotopologue label, only to separate the name and the isotopologue label
 extract_col_isotopologues<-function(iso_col_tb,iso_suffix_sep="_") {
   #Add column with metabolite name extracted from isotopologue name based on
   #given suffix, then rename Isotopologues from 0 to highest isotopologue per 
   #metabolite
-  iso_col_tb %>% t_tibble(first_colname = "Isotopologue") %>%
-    #required to apply all functions (esp max) to current row only
+  iso_col_tb %>% 
+    select(where(~ !all(is.na(.))))%>%
+    t_tibble(first_colname = "Isotopologue") %>%
     rowwise() %>%    
-    mutate(Metabolite=
+    mutate(compound=
              substr(Isotopologue,1,
                     max(gregexpr(iso_suffix_sep,
                                  Isotopologue,fixed = T)[[1]])-1),
+           datatype=paste0("Isotopologue_",
+                           substr(Isotopologue,
+                                  max(gregexpr(iso_suffix_sep,
+                                               Isotopologue,fixed = T)[[1]])+1,
+                                  nchar(Isotopologue))),
            .before=1) %>%
-    group_by(Metabolite) %>%
+    group_by(compound) %>%
     #n() gives the current group size
     mutate(Isotopologue=seq(from=0,to=n()-1,by=1)) %>%
     ungroup()%>%
-  
-  #if desired (needed in travis pies) summarize isotopologue data with name
-  #sample column, otherwise make row per sample isotopologue combo with
-  #isotopologue_isotopologueNR as datatype
-    # mutate(datatype=paste0("Isotopologue_",as.character(Isotopologue))) %>%
-    select(Metabolite,everything()) %>%
-    pivot_longer(3:ncol(.),names_to = "Sample",values_to = "value") %>%
-    # pivot_wider(names_from = Metabolite,values_from = value)%>%
+    pivot_longer(4:ncol(.),names_to = "Sample",values_to = "value") %>%
     select(Sample,everything())
 }
 
@@ -583,17 +550,16 @@ extract_et_isotopologues<-function(iso_et_tb){
     filter(!is.na(Isotopologue))
 }
 
-
 #Calculates a columnwise FC table based on an extracted isotopologue table
 #can specify sample column name
 calculate_FC<-function(iso_tb,sample_colname="Sample"){
   sample_symbol<-rlang::sym(sample_colname)
   
   #calculate FC table, then reformat to columnwise format
-  iso_tb %>% group_by(Metabolite,!!sample_symbol) %>%
+  iso_tb %>% group_by(compound,!!sample_symbol) %>%
     summarise(value = sum(value*Isotopologue)/max(Isotopologue))%>%
     select(!!sample_symbol,everything())%>%
-    pivot_wider(names_from = Metabolite,values_from = value)
+    pivot_wider(names_from = compound,values_from = value)
     
   # %>%
   #   t_tibble(first_colname = sample_colname)
@@ -701,175 +667,182 @@ check_samples_compounds<-function(meta_tb,abund_tb,frac_tb,sample_column,
   return(outlist)
 }
 
-merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
-                                      sample_col="Sample",compounds) {
-  #Per compound adapt FC's below 0 (artefacts due to natural abundance
-  #correction) to be positive to avoid problems with the visualisations
-  #later on.
-  for (i in (2:ncol(frac_tb))) {
-    if (any(frac_tb[,i]<0)) {
-      FCs<-pull(frac_tb[,i])
-      FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)]) 
-      frac_tb[,i]<-FCs    
-    }
-  }
-  
-  #modify iso_tb if it exists before summarizing
-  if (length(iso_tb)>0) {
-    iso_tb<-iso_tb %>%
-      pivot_wider(names_from = any_of(sample_col),values_from = value)
-      
-    #Per compound adapt isotopologues's below 0 (artefacts due to natural abundance 
-    #correction) to be positive to avoid problems with the visualisations
-    #later on
-    for (i in (2:nrow(iso_tb))) {
-      if (any(iso_tb[i,]<0)) {
-        #check if any value for this isotopologue below 0
-        metabolite<-iso_tb$Metabolite[i]
-        isos<-iso_tb[i,-c(1,2)]
-        negisos<-which(isos<0)
-        
-        #if no values negative, skip this section to avoid empty reference  
-        #warnings and useless computing. If negatives, no zero correction was done
-        #before and should be done now
-        if (length(negisos)>0) {
-          #Make variable containing negative iso value and 0 for others
-          #then overwrite negative iso values to 0
-          toadd<-isos
-          toadd[-negisos]<-0
-          isos[negisos]<-0   
-          iso_tb[i,-c(1,2)]<-isos
-          
-          #add negative iso values to parent to offset previous addition to 
-          #parent to compensate negative values
-          parent_index<-which(iso_tb$Metabolite==metabolite & 
-                                iso_tb$Isotopologue==0)
-          iso_tb[parent_index,-c(1,2)]<-iso_tb[parent_index,-c(1,2)]+toadd
-          
-          #if any parents became <0, set to 0 (likely parent was undetectable)
-          iso_tb[parent_index,][which(iso_tb[parent_index,]<0&
-                                        is.numeric(iso_tb[parent_index,]))]<-0
-        }
-        
-      }
-    }
-  }
-  
-  #rename sample column in all inputs
-  meta_tb<-rename(meta_tb,Sample=all_of(sample_col))
-  abund_tb<-rename(abund_tb,Sample=all_of(sample_col))
-  frac_tb<-rename(frac_tb,Sample=all_of(sample_col))
-  
-  #add metadata to abundance and fractional contribution data respectively
-  #retaining only selected samples, and drop metabolites with 0 abundance
-  #in every sample to avoid errors
-  abund_tb<-left_join(meta_tb,abund_tb,by="Sample") %>%
-    select(1:ncol(meta_tb),any_of(compounds)) %>%
-    select_if(has_nonzero)
-  
-  frac_tb<-left_join(meta_tb,frac_tb,by="Sample") %>%
-    select(1:ncol(meta_tb),any_of(colnames(abund_tb))) 
-  
-  if(!length(iso_tb)==0) {
-    iso_tb<-iso_tb%>%
-      pivot_longer(3:ncol(.),names_to = "Sample",values_to = "value")%>%
-      pivot_wider(names_from = Metabolite,values_from = value)%>%
-      left_join(meta_tb,by="Sample") %>%
-      mutate(datatype=paste0("Isotopologue_",as.character(Isotopologue)),
-             across(any_of(colnames(abund_tb)),as.character)) %>%
-      select(any_of(colnames(meta_tb)),datatype,any_of(colnames(abund_tb)))%>%
-      filter(Sample %in% meta_tb$Sample)
-  }
-  
-  #add fractional contribution and isotopologues equal to 100% unlabeled to 
-  #compounds in abundance but not fraction labeling table
-  if (any(!colnames(abund_tb) %in% colnames(frac_tb))) {
-    nolabnames<-colnames(abund_tb)[which(! colnames(abund_tb) %in%
-                                           colnames(frac_tb))]
-    for (i in nolabnames) {
-      frac_tb$new<-0
-      colnames(frac_tb)[ncol(frac_tb)]<-i
-    }
-    if(!length(iso_tb)==0) {
-      for (i in nolabnames) {
-        iso_tb$new<-"1"
-        colnames(iso_tb)[ncol(iso_tb)]<-i
-      }
-    }
-  }
-  
-  
-  #prepare abundance data for joining: 
-  #calculate normalized abundances if normalization column provided and add
-  #to abund tb as different datatype. 
-  #add as character as isotopologue summaries will be character too
-  abund_tb <-abund_tb %>% add_column(datatype="Abund")
-  
-  if ("Normalisation" %in% colnames(meta_tb)) {
-    abund_tb<-abund_tb %>% 
-      mutate(across((ncol(meta_tb)+1):(ncol(abund_tb)-1),
-                    function(x) x/Normalisation)) %>%
-      mutate(datatype="NormAbund") %>%
-      full_join(abund_tb,by=colnames(abund_tb)) %>%
-      mutate(across(any_of(compounds),as.character)) 
-  } else {
-    abund_tb<-abund_tb %>%mutate(across(any_of(compounds),as.character)) 
-  }
-  
-  #prepare labeling  data for joining: 
-  #Add isotopologue data to fractional contribution data
-  frac_tb <-frac_tb %>% mutate(across(any_of(compounds),as.character)) %>%
-    add_column(datatype="FracCont")
-  
-  if(!length(iso_tb)==0) {
-    # iso_tb$datatype<-"Isotopologues"
-    frac_tb<-full_join(frac_tb,iso_tb,by=colnames(frac_tb))
-  }
-  
-  #join all tables then order and put in long format
-  #remove normalisation factor if present
-  tb<-full_join(frac_tb,abund_tb,by=colnames(abund_tb)) %>%
-    select(colnames(meta_tb),datatype,everything())%>%
-    pivot_longer(-c(any_of(colnames(meta_tb)),datatype),names_to = "compound",
-                 values_to = "value")%>%
-    na.omit()%>%
-    mutate(value=as.numeric(value))
-    
-    if (any("Normalisation" %in% colnames(meta_tb))) {
-      tb<-select(tb,-Normalisation) 
-    }
-  
-  return(tb)
-}  
+# merge_input<-function(meta_tb,abund_tb,frac_tb,iso_tb=NULL,
+#                                       sample_col="Sample",compounds) {
+#   #Per compound adapt FC's below 0 (artefacts due to natural abundance
+#   #correction) to be positive to avoid problems with the visualisations
+#   #later on.
+#   for (i in (2:ncol(frac_tb))) {
+#     if (any(frac_tb[,i]<0)) {
+#       FCs<-pull(frac_tb[,i])
+#       FCs[which(FCs<0)]<-FCs[which(FCs<0)]-min(FCs[which(FCs<0)]) 
+#       frac_tb[,i]<-FCs    
+#     }
+#   }
+#   
+#   #modify iso_tb if it exists before summarizing
+#   if (length(iso_tb)>0) {
+#     iso_tb<-iso_tb %>%
+#       pivot_wider(names_from = any_of(sample_col),values_from = value)
+#       
+#     #Per compound adapt isotopologues's below 0 (artefacts due to natural abundance 
+#     #correction) to be positive to avoid problems with the visualisations
+#     #later on
+#     for (i in (2:nrow(iso_tb))) {
+#       if (any(iso_tb[i,]<0)) {
+#         #check if any value for this isotopologue below 0
+#         metabolite<-iso_tb$Metabolite[i]
+#         isos<-iso_tb[i,-c(1,2)]
+#         negisos<-which(isos<0)
+#         
+#         #if no values negative, skip this section to avoid empty reference  
+#         #warnings and useless computing. If negatives, no zero correction was done
+#         #before and should be done now
+#         if (length(negisos)>0) {
+#           #Make variable containing negative iso value and 0 for others
+#           #then overwrite negative iso values to 0
+#           toadd<-isos
+#           toadd[-negisos]<-0
+#           isos[negisos]<-0   
+#           iso_tb[i,-c(1,2)]<-isos
+#           
+#           #add negative iso values to parent to offset previous addition to 
+#           #parent to compensate negative values
+#           parent_index<-which(iso_tb$Metabolite==metabolite & 
+#                                 iso_tb$Isotopologue==0)
+#           iso_tb[parent_index,-c(1,2)]<-iso_tb[parent_index,-c(1,2)]+toadd
+#           
+#           #if any parents became <0, set to 0 (likely parent was undetectable)
+#           iso_tb[parent_index,][which(iso_tb[parent_index,]<0&
+#                                         is.numeric(iso_tb[parent_index,]))]<-0
+#         }
+#         
+#       }
+#     }
+#   }
+#   
+#   #rename sample column in all inputs
+#   meta_tb<-rename(meta_tb,Sample=all_of(sample_col))
+#   abund_tb<-rename(abund_tb,Sample=all_of(sample_col))
+#   frac_tb<-rename(frac_tb,Sample=all_of(sample_col))
+#   
+#   #add metadata to abundance and fractional contribution data respectively
+#   #retaining only selected samples, and drop metabolites with 0 abundance
+#   #in every sample to avoid errors
+#   abund_tb<-left_join(meta_tb,abund_tb,by="Sample") %>%
+#     select(1:ncol(meta_tb),any_of(compounds)) %>%
+#     select_if(has_nonzero)
+#   
+#   frac_tb<-left_join(meta_tb,frac_tb,by="Sample") %>%
+#     select(1:ncol(meta_tb),any_of(colnames(abund_tb))) 
+#   
+#   if(!length(iso_tb)==0) {
+#     iso_tb<-iso_tb%>%
+#       pivot_longer(3:ncol(.),names_to = "Sample",values_to = "value")%>%
+#       pivot_wider(names_from = Metabolite,values_from = value)%>%
+#       left_join(meta_tb,by="Sample") %>%
+#       mutate(datatype=paste0("Isotopologue_",as.character(Isotopologue)),
+#              across(any_of(colnames(abund_tb)),as.character)) %>%
+#       select(any_of(colnames(meta_tb)),datatype,any_of(colnames(abund_tb)))%>%
+#       filter(Sample %in% meta_tb$Sample)
+#   }
+#   
+#   #add fractional contribution and isotopologues equal to 100% unlabeled to 
+#   #compounds in abundance but not fraction labeling table
+#   if (any(!colnames(abund_tb) %in% colnames(frac_tb))) {
+#     nolabnames<-colnames(abund_tb)[which(! colnames(abund_tb) %in%
+#                                            colnames(frac_tb))]
+#     for (i in nolabnames) {
+#       frac_tb$new<-0
+#       colnames(frac_tb)[ncol(frac_tb)]<-i
+#     }
+#     if(!length(iso_tb)==0) {
+#       for (i in nolabnames) {
+#         iso_tb$new<-"1"
+#         colnames(iso_tb)[ncol(iso_tb)]<-i
+#       }
+#     }
+#   }
+#   
+#   
+#   #prepare abundance data for joining: 
+#   #calculate normalized abundances if normalization column provided and add
+#   #to abund tb as different datatype. 
+#   #add as character as isotopologue summaries will be character too
+#   abund_tb <-abund_tb %>% add_column(datatype="Abund")
+#   
+#   if ("Normalisation" %in% colnames(meta_tb)) {
+#     abund_tb<-abund_tb %>% 
+#       mutate(across((ncol(meta_tb)+1):(ncol(abund_tb)-1),
+#                     function(x) x/Normalisation)) %>%
+#       mutate(datatype="NormAbund") %>%
+#       full_join(abund_tb,by=colnames(abund_tb)) %>%
+#       mutate(across(any_of(compounds),as.character)) 
+#   } else {
+#     abund_tb<-abund_tb %>%mutate(across(any_of(compounds),as.character)) 
+#   }
+#   
+#   #prepare labeling  data for joining: 
+#   #Add isotopologue data to fractional contribution data
+#   frac_tb <-frac_tb %>% mutate(across(any_of(compounds),as.character)) %>%
+#     add_column(datatype="FracCont")
+#   
+#   if(!length(iso_tb)==0) {
+#     # iso_tb$datatype<-"Isotopologues"
+#     frac_tb<-full_join(frac_tb,iso_tb,by=colnames(frac_tb))
+#   }
+#   
+#   #join all tables then order and put in long format
+#   #remove normalisation factor if present
+#   tb<-full_join(frac_tb,abund_tb,by=colnames(abund_tb)) %>%
+#     select(colnames(meta_tb),datatype,everything())%>%
+#     pivot_longer(-c(any_of(colnames(meta_tb)),datatype),names_to = "compound",
+#                  values_to = "value")%>%
+#     na.omit()%>%
+#     mutate(value=as.numeric(value))
+#     
+#     if (any("Normalisation" %in% colnames(meta_tb))) {
+#       tb<-select(tb,-Normalisation) 
+#     }
+#   
+#   return(tb)
+# }  
 
 #Select only desired columns and filter only supported datatypes.
 #Extract data only for desired factor levels and set factor order
 #need to use !! for dynamic variable names in tidyverse selection
 #see https://stackoverflow.com/questions/50537164/summarizing-by-dynamic-column-name-in-dplyr 
-prepare_piedata<-function(tb,factor_columns,tracer_column,
-                              fact_order=unique(pull(tb,!!factor_columns))){
+prepare_piedata<-function(tb,sample_column="Sample",factor_columns,
+                          tracer_column,
+                          fact_order=unique(pull(tb,!!factor_columns))){
   #prepare factor name symbol to use as target column name for mutate
   #select only one compound, filter to include normalized or non normalized
   # abundances
-  fact_symbol<-rlang::syms(factor_columns)
-  tracer_symbol<-rlang::sym(tracer_column)
-  compound_tb<-tb %>% select(Sample,!!factor_columns,datatype,compound,value,
-                             !!tracer_symbol) %>%
+  sample_symbol<-sym_or_null(sample_column,allownull = F)
+  factor_symbols<-sym_or_null(factor_columns,returnlist = T)
+  tracer_symbol<-sym_or_null(tracer_column)
+
+  #select only desired and present columns, keep only supported datatypes
+  compound_tb<-tb %>% select(!!sample_symbol,!!!factor_symbols,!!tracer_symbol,
+                             compound,datatype,value) %>%
     filter(datatype %in% c("FracCont","NormAbund","Abund") |
              grepl("iso",tolower(datatype),fixed = T))
   
-  for(i in 1:length(fact_symbol)) {
-    # select only given factor levels, then drops unused levels
-    compound_tb<-compound_tb %>%
-      filter(!!fact_symbol[[i]] %in% fact_order[[i]]) %>%
-      droplevels() %>%
-      
-      #Change factor variable from text into actual factor for visualisation and
-      #significance testing, then arrange data order to match the factor levels
-      mutate(!!fact_symbol[[i]]:=factor(!!fact_symbol[[i]],
-                                        levels = fact_order[[i]]))%>%
-      arrange(!!fact_symbol[[i]])
+  if(length(factor_symbols)>0) {
+    for(i in 1:length(factor_symbols)) {
+      # select only given factor levels, then drops unused levels
+      compound_tb<-compound_tb %>%
+        filter(!!factor_symbols[[i]] %in% fact_order[[i]]) %>%
+        droplevels() %>%
+        
+        #Change factor variable from text into actual factor for visualisation and
+        #significance testing, then arrange data order to match the factor levels
+        mutate(!!factor_symbols[[i]]:=factor(!!factor_symbols[[i]],
+                                          levels = fact_order[[i]]))%>%
+        arrange(!!factor_symbols[[i]])
+    }
   }
+  
   return(compound_tb)
 }
 
@@ -883,8 +856,9 @@ kruskal_piedata<-function(data,test_formula,factor_column,fact_order){
   ref_cohort<-fact_order[[1]][1]
   kwtest_results<-tibble(!!factor_symbol:=fact_order[[1]][-1],
                          p.value=NA)
-  for(i in fact_order[[1]][-1]){
-    partdata<-data %>% filter(!!factor_symbol %in% c(ref_cohort,i))
+  for(i in 2:length(fact_order[[1]])){
+    tgt_cohort<-fact_order[[1]][i]
+    partdata<-data %>% filter(!!factor_symbol %in% c(ref_cohort,tgt_cohort))
     kwtest_results<-kwtest_results %>%
       mutate(p.value=if_else(!!factor_symbol==i,
                              kruskal.test(formula=test_formula,data=partdata)$p.value,
@@ -897,30 +871,28 @@ kruskal_piedata<-function(data,test_formula,factor_column,fact_order){
 #Make table with averages of datatype per cohort
 #Calculates p values of significance tests of both relative abundance,
 #fractional contribution and isotopologues for each tracer
+#todo make sure it supports no factor and no tracer as well
 summarise_piedata<-function(prepare_tb,abund_string="abun",factor_column,
-                            compar_factor_column=NULL,tracer_column,fact_order
+                            comparative_factor_column=NULL,tracer_column,
+                            fact_order
 ) {
+  #test
+  if(length(factor_columns)>2 ) stop("More than two factors were supplied")
+  # if(length(factor_columns)==0) stop("No factors were supplied")
+  
   #prepare factor and tracer symbols
   factor_columns <- c(factor_column,comparative_factor_column)
-  
-  if(length(factor_columns)==1){
-    factor_symbol<-rlang::sym(factor_columns)
-  } else if(length(factor_columns)==2) {
-    factor_symbol<-rlang::sym(factor_column)
-    compar_factor_symbol<-rlang::sym(comparative_factor_column)
-  } else {
-    if(length(factor_columns)>2 ) stop("More than two factors were supplied")
-    if(length(factor_columns)==0) stop("No factors were supplied")
-  }
-  factor_symbols<-rlang::syms(factor_columns) 
-  
-  tracer_symbol<-rlang::sym(tracer_column)
+  sample_symbol<-sym_or_null(sample_column,allownull = F)
+  factor_symbol<-sym_or_null(factor_column)
+  compar_factor_symbol<-sym_or_null(comparative_factor_column)
+  factor_symbols<-sym_or_null(factor_columns,returnlist = T)
+  tracer_symbol<-sym_or_null(tracer_column)
   
   ab_sum_tb<-prepare_tb%>%
     filter(grepl("abun",tolower(datatype))) %>%
     {
-      if (exists("compar_factor_symbol")) {
-        group_by(.,compound,!!compar_factor_symbol,datatype)
+      if (length(comparative_factor_column)>0) {
+        group_by(.,compound,comparative_factor_column,datatype)
       } else {
         group_by(.,compound,datatype)
       }
@@ -944,7 +916,7 @@ summarise_piedata<-function(prepare_tb,abund_string="abun",factor_column,
         group_by(.,compound,!!!factor_symbols,datatype)%>%
         summarise(average = mean(value))
     )%>%
-    mutate(!!tracer_symbol:="")
+    mutate(across(!!tracer_symbol,~ ""))
   
   #make summary tibble of fractional contribution and isotopologue data,
   #then add abundance data
@@ -952,8 +924,8 @@ summarise_piedata<-function(prepare_tb,abund_string="abun",factor_column,
     filter(grepl("frac",tolower(datatype))|
              grepl("iso",tolower(datatype))) %>%
     {
-      if (exists("compar_factor_symbol")) {
-        group_by(.,compound,!!compar_factor_symbol,!!tracer_symbol,datatype)
+      if (length(comparative_factor_column)>0) {
+        group_by(.,compound,comparative_factor_column,!!tracer_symbol,datatype)
       } else {
         group_by(.,compound,!!tracer_symbol,datatype)
       }
@@ -1022,12 +994,25 @@ add_UnlabFC<-function(sum_tb,factor_columns,tracer_column){
 #formatting. 
 add_FClabels<-function(sum_tb,fraction_column,label_decimals,percent_add,factor_columns,
                        tracer_column,FC_position,min_lab_dist){
-  fraction_symbol <- rlang::sym(fraction_column)
-  tracer_symbol <- rlang::sym(tracer_column)
-  tracers<-sum_tb%>%
-    filter(grepl("frac",tolower(datatype),fixed = T)) %>%
-    pull(tracer_column)%>%
-    unique()
+  factor_symbols<-sym_or_null(factor_columns,returnlist = T)
+  tracer_symbol<-sym_or_null(tracer_column)
+  if(length(tracer_symbol)>0) {
+    nutrient_symbols<-sum_tb%>%
+      filter(grepl("frac",tolower(datatype),fixed = T)) %>%
+      pull(tracer_column)%>%
+      unique()%>%
+      rlang::syms()
+  } else nutrient_symbols<-NULL
+  
+  fraction_symbol <- sym_or_null(fraction_column)
+  tracer_symbol<-sym_or_null(tracer_column)
+  if(length(tracer_column)>0) {
+    tracers<-sum_tb%>%
+      filter(grepl("frac",tolower(datatype),fixed = T)) %>%
+      pull(tracer_column)%>%
+      unique()
+  } else tracers<-NULL
+  
   
   if(length(tracers)>1){
     FC_position="slice"
@@ -1128,14 +1113,16 @@ make_iso_slices<-function(sum_tb,factor_columns,tracer_column){
 make_FC_slices<-function(sum_tb,factor_columns,tracer_column){
   
   #get symbols factor and tracer; and each tracer nutrient used
-  factor_symbols<-rlang::syms(factor_columns)
-  tracer_symbol<-rlang::sym(tracer_column)
-  nutrient_symbols<-sum_tb%>%
-    filter(grepl("frac",tolower(datatype),fixed = T)) %>%
-    pull(tracer_column)%>%
-    unique()%>%
-    rlang::syms()
-  
+  #prepare factor and tracer symbols
+  factor_symbols<-sym_or_null(factor_columns,returnlist = T)
+  tracer_symbol<-sym_or_null(tracer_column)
+  if(length(tracer_symbol)>0) {
+    nutrient_symbols<-sum_tb%>%
+      filter(grepl("frac",tolower(datatype),fixed = T)) %>%
+      pull(tracer_column)%>%
+      unique()%>%
+      rlang::syms()
+  } else nutrient_symbols<-NULL
   
   sum_tb%>%
     filter(grepl("frac",tolower(datatype),fixed = T)) %>%
@@ -1159,11 +1146,24 @@ make_FC_slices<-function(sum_tb,factor_columns,tracer_column){
     mutate(Abund=Abund/max(Abund),
            Fraction=FracCont*Abund)%>%
     select(-P_FC,-FracCont)%>%
-    pivot_wider(names_from = !!tracer_symbol,values_from = Fraction)%>%
+    {
+      if (length(tracer_symbol)>0) {
+        pivot_wider(.,names_from = !!tracer_symbol,values_from = Fraction)
+      } else {
+        rename(.,Labeled=Fraction)
+      }
+    }%>%
     rowwise()%>%
-    mutate(Unlabeled=Abund-sum(!!!nutrient_symbols,na.rm = T))%>%  
-    pivot_longer(c(!!!nutrient_symbols,Unlabeled),names_to=tracer_column,
-                 values_to="Fraction")%>%
+    mutate(Unlabeled=Abund-sum(!!!nutrient_symbols,na.rm = T))%>%
+    {
+      if (length(tracer_symbol)>0) {
+        pivot_longer(c(!!!nutrient_symbols,Unlabeled),names_to=tracer_column,
+                     values_to="Fraction")
+      } else {
+        pivot_longer(c(!!!nutrient_symbols,Unlabeled),names_to=tracer_column,
+                     values_to="Fraction")
+      }
+    }%>%
     mutate(FracCont=Fraction/Abund)%>%
     na.omit()%>%
     left_join(

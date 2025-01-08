@@ -61,6 +61,10 @@
 #Set variables = "None" as =NULL
 #adapt UI functions to work with new setup
 
+#todo general
+#longest step with loads of data is summarize pies because of repeat over
+#all groups in data, but likely not a big issue when few groups
+
 # Functions and libraries ---------------------------------------------------------------
 #libraries for functions used
 library(here)    #to make r source from file location instead of magic stuff
@@ -88,10 +92,18 @@ source(here::here("Functions and modules/TraVis_Pies_functions merge isos and mu
 #set variables to NULL or none as required by functions that might not be present in data
 #and inputtype to NULL
 comparative_factor_column<-sampletype_column<-factor_column <- norm_column <- 
-  tracer_column<-inputtype<-NULL
+  tracer_column<-inputtype<-libfile<-lib_tb<-NULL
+minfract_detected<-0
 
+#set variables to a default value that can be changed for specific projects
+#further in input
+isostring<-"parent"
+metastring<-"meta"
+abundstring<-"abund"
+labelstring<-"iso"
 
 #test  excel with labeled data
+isostring<-"_C13-0"
 path<-here::here("Example_data/Input Excel")
 savepath<-path
 excelfile<-"example excel.xlsx"
@@ -99,14 +111,17 @@ inputpath<-paste(path,excelfile,sep = "/")
 read_excel(inputpath,
            which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
                    colnames()
+read_excel(inputpath,
+           which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
+  colnames()
 sample_column <-"Sample"
 factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
 norm_column <- "Normalisation"   #"None" if not present
 sampletype_column<-"sample_type"
-
+libfile<-"Lib_excelexample.csv"
+lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
 
 #test data 1-factor no replicates
- 
 # rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Other examples for nonUI app\Bram problems 2)"
 # inputpath<-path<-gsub("\\\\", "/", rawpath)
 # # inputpath<-path<-here::here("Example_data/Original input")
@@ -127,14 +142,18 @@ sampletype_column<-"sample_type"
 # inputpath<-path<-gsub("\\\\", "/", rawpath)
 # inputpath<-path<-here::here("Example_data/Original input")
 # savepath<-path
-# metadatafile<-"Input_Example_metadata.csv"
-# abundancefile<-"Input_Example_RA.csv"
-# tracerfile<-"Input_Example_FC.csv"
 # mapcoordsfile<-"Pathway figure coords.csv"
-# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-#                remove_empty = T)%>%colnames()
+# list.files(inputpath)
+# metastring<-"metadata."
+# abundstring<-"_RA."
+# labelstring<-"_FC"
+# labelstring<-"_iso"
+# loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
+# testload<-loadfile_stringmatch(inputpath,abundstring)
+# testload<-loadfile_stringmatch(inputpath,labelstring)
 # sample_column <-"Sample"
 # factor_column <- "Cohort"   #"None" if not present, or 1 or two element vector
+# norm_column<-"Normalisation"
 
 
 #test data 1-factor iso input
@@ -290,275 +309,45 @@ alpha<-0.7
 format<-"png"
 
 
-# Code-------------------------------------------------------------------
-
-#If no tracer column, make dummy column and set tracer column name to Tracer
-#then make symbol for dplyr pipelines
-if(length(tracer_column)==0) {
-  tracer_symbol<-NULL
-} else {
-  tracer_symbol<-rlang::sym(tracer_column) #one symbol
-}
-
-
-#Check how many factors supplied, make dummy if none, keep if one, keep a 
-#variable with both and separate variables if two, error if more than two
-#make symbols for use in dplyr pipelines
+# Code merging data-------------------------------------------------------------------
+#make symbols for dplyr pipelines
 factor_columns <- c(factor_column,comparative_factor_column)
-
-if(length(factor_columns)==1){
-  twofactor=F
-  factor_symbol<-rlang::sym(factor_columns)
-  factor_symbols<-rlang::syms(factor_columns) #list of symbols
-  if (exists("compar_factor_symbol")) rm("compar_factor_symbol")
-} else if(length(factor_columns)==2) {
-  twofactor=T
-  factor_symbol<-rlang::sym(factor_column)
-  compar_factor_symbol<-rlang::sym(comparative_factor_column)
-  factor_symbols<-rlang::syms(factor_columns) #list of symbols
-} else if(length(factor_columns)==0 ) {
-  print("No factor was supplied")
-  factor_symbol<-factor_symbols<-NULL
-} else {
-  if(length(factor_columns)>2 ) stop("More than two factors were supplied")
+factor_symbols<-sym_or_null(factor_columns,returnlist = T)
+factor_symbol<-factor_symbols[[1]]
+if(length(factor_symbols)==2) compar_factor_symbol<-factor_symbols[[2]] else {
+  compar_factor_symbol<-NULL
 }
+sample_symbol<-sym_or_null(sample_column,allownull = F)
+tracer_symbol<-sym_or_null(tracer_column)
+norm_symbol<-sym_or_null(norm_column)
+sampletype_symbol<-sym_or_null(sampletype_column)
 
-metastring<-"meta"
-abundstring<-"abund"
-labelstring<-"iso"
-if(grepl(".xls",inputpath)) {
-  print("String `.xls` detected in ",inputpath,", expecting excelfile")
-  if (!file.exists(inputpath)) {
-    stop(paste0(inputpath," is not an existing excel file, correct or remove ",
-                "`.xls` string from inputpath if it is a path to a folder"))
-  }
-  # debug(format_metadata)
-  meta_formatted_tb<-extract_excelsheet_tb(inputpath,
-                                          sheetnamestring = metastring,
-                                          datatype_intended = "metadata",
-                                          samplename = "Sample")%>%
-    format_metadata(sample_column = sample_column,
-                    factor_columns = factor_columns,
-                    norm_column = norm_column,
-                    tracer_column=tracer_column,
-                    sampletype_column=sampletype_column)
-  
-  abund_tb<-extract_excelsheet_tb(inputpath,
-                                  sheetnamestring = abundstring,
-                                  datatype_intended = "abundance data",
-                                  samplename = "Sample")  
-  
-  #todo continue from here load isotb, do checks,store as list, then use 
-  #different functionto turn list into long tb
-  
-  inputlist<-list(meta_tb=meta_formatted_tb)
-  
-} else if(dir.exists(inputpath)) {
-  meta_formatted_tb<-input_tb<-vroom::vroom(file = paste(path,metadatafile,sep = "/"),
-                                            delim = ",",
-                                            show_col_types = FALSE)%>%
-    format_metadata(sample_column = sample_column,
-                    factor_columns = factor_columns,
-                    norm_column = norm_column,
-                    tracer_column=tracer_column)
-  #read isotopologue or fractional contribution data. Set empty isotopologue tibble
-  #if no isotopologue data supplied
-  frac_tb<-read_csv_clean(paste0(path,"/",tracerfile),remove_empty = T,
-                          remove_rowempty = T)
-  if(any(grepl("parent",tolower(colnames(frac_tb))))) {
-    iso_tb<-extract_col_isotopologues(frac_tb,
-                                      iso_suffix_sep = "_")
-    frac_tb<-calculate_FC(iso_tb)
-  } else {
-    iso_tb<-NULL
-  }
-} else stop(paste0(inputpath ,"not found. Please specify an existing folder or ",
-                   "excel file. For the latter, make sure the path contains ",
-                   "the string `.xls` somehwere, like ",
-                   "examplefolder/examplefile.xlsx"))
+input_list<-
+  list_inputdata_tbs(inputpath,metastring = metastring,
+                     abundstring = abundstring,labelstring = labelstring,
+                     isostring = isostring,sample_column = sample_column,
+                     factor_columns = factor_columns,
+                     norm_column = norm_column,
+                     tracer_column = tracer_column,
+                     sampletype_column = sampletype_column,lib_tb = lib_tb)
 
-#input metadata and abundance data, put in right format for following functions
-if (inputtype=="csv"){
-  
-} else if (inputtype=="excel") {
+#if no fractional contribution data present, 
+#calculate from isotopologue data
+if(!"frac_tb"%in% names(input_list)) {
+  #calculate fractional contribution
+  frac_worktb<-extract_col_isotopologues(input_list$iso_tb,
+                                         iso_suffix_sep = "_")%>%
+    select(-datatype)%>%
+    calculate_FC()
 
-  #extract excelsheet and format metadata
-  
-} else stop("inputtype must be `excel`or `csv`")
+} else frac_worktb<-input_list$frac_tb
 
-#todo continue making function work, but consider doing first quick cleaning
-#to get data, then combine checks and deep cleaning from csv and excel code 
-#based on cleaned tibbles in both cases
-data_to_long<-function(excelfile,sheetnamestring,
-                       datatypename=c("Abund","FracCont",
-                                      "Isotopologues"),lib_tb=NULL,meta_tb,
-                       samplename="Sample",normalize=c(true,false),
-                       sampletype_column=NULL,min_detected=0.9)
-samplename<-"Sample"  
-sample_symbol<-rlang::sym(samplename)
-sampletype_symbol<-rlang::sym(sampletype_column)
-sheetnamestring<-"abund"
-sheetname<-excel_sheets(inputpath)[
-  which(grepl(sheetnamestring,tolower(excel_sheets(inputpath))))]
-
-excel_tb <- read_excel(inputpath,sheetname)
-
-lib_tb<-NULL
-datatypename<-"Abund"
-meta_tb<-meta_formatted_tb
-
-if(any(colnames(lib_tb)=="Orig_name")) {
-  for(i in 1:nrow(lib_tb)){
-    colnames(excel_tb)<-sub(lib_tb$compound[i],
-                            lib_tb$Orig_name[i],
-                            colnames(excel_tb),
-                            fixed = T)
-  }  
-}
-
-#replace all but last _ in isotopologe compound names for easy 
-#substringing later. To match names, make sure to replace all _ in 
-#non-isotopologue compound names
-if (datatypename=="Isotopologues") {
-  colnames(excel_tb)<-replace_except_last(colnames(excel_tb))
-} else {
-  colnames(excel_tb)<-gsub("_"," ",colnames(excel_tb))
-}
-
-#detect internal standards in sheet
-headers<-excel_tb %>% 
-  select(where(~ all(is.na(.)))) %>%
-  colnames()
-
-if (length(headers[which(grepl("internal",tolower(headers)))])>0) {
-  intstdfirstcol<-which(colnames(excel_tb) ==
-                          headers[which(grepl("internal",
-                                              tolower(headers)))][1])+1
-  intstdlastcol<-which(colnames(excel_tb) ==
-                         headers[which(grepl("internal",
-                                             tolower(headers)))+1][1])-1
-  intstds<-colnames(excel_tb)[intstdfirstcol:intstdlastcol]
-} else {
-  intstds<-NULL
-}  
-
-#remove empty rows and columns, set sample name, replace percentage strings to fractions
-excelclean <- excel_tb %>% 
-  select(where(~ !all(is.na(.))))%>%
-  na.omit()%>%
-  rename(!!sample_symbol:=1)%>%
-  mutate(across(where(~any(grepl("%",.x,fixed=T))),function(x) 
-    as.numeric(sub(pattern="%", replacement = "",x,fixed = T))/100))
-  
-long_format<-F
-#check if abundance sheet for specific actions to 
-#take with it. Convert data to long format if not done before.
-if (grepl("abund",tolower(datatypename))){
-  
-  #if LOD in sheet calculate LOD and average blank from supposed mock samples,
-  #and remove these samples from the abundance sheet. Set blank and LOD to 0
-  #for internal standards.
-  #then remove rows that contain blanks, lod from sheet, subtract 
-  #blank and add LOD and above LOD term to each compound-sample combination, 
-  #and keep both blank uncorrected and corrected abundances and LOD.
-  if (any(tolower(pull(meta_tb,sampletype_symbol))=="blank")) {
-    blanks_tb<-excelclean %>%
-      filter(!!sample_symbol %in% c(meta_tb %>%
-                             filter(tolower(!!sampletype_symbol)=="blank")%>%
-                             pull(!!sample_symbol))) %>%
-      pivot_longer(cols = 2:ncol(.),
-                   names_to = "compound", 
-                   values_to= "Abund")%>%
-      group_by(compound)%>%
-      summarise(av_blank=mean(Abund),
-                LOD=av_blank+3*sd(Abund))%>%
-      mutate(
-        av_blank=if_else(compound %in% intstds,0,av_blank),
-        LOD=if_else(compound %in% intstds,0,LOD)
-      )
-    
-    excelclean <- excelclean %>%
-      pivot_longer(cols = 2:ncol(.),
-                   names_to = "compound", 
-                   values_to= "Abund")%>%
-      left_join(blanks_tb, by=join_by(compound))%>%
-      mutate(ab_blankcor=Abund-av_blank,
-             LOD_blankcor=LOD-av_blank,
-             detected=Abund>LOD) %>%
-      pivot_longer(cols = c("Abund","ab_blankcor"),
-                   names_to = "datatype", 
-                   values_to= "value") %>%
-      select(!!sample_symbol,compound,datatype,value,LOD,LOD_blankcor,detected)%>%
-      filter(!!!sample_symbol %in% c(meta_tb %>%
-                              filter(tolower(pull(meta_tb,sampletype_column))=="blank")%>%
-                              pull(!!sample_symbol)),
-             !grepl("lod",tolower(!!sample_symbol)))
-    
-    long_format<-T
-  } else if (length(sampletype_column)>0){
-    #if no mocks, don't do blank correction
-    print(paste0("No samples indicated as blank in metadata column ",
-    sampletype_column, ". Assumed no LOD calculation or blank correction",
-    " needed"))
-  } else print(paste0("No sample type column assigned. Assumed no LOD ",
-               "calculation or blank correction needed"))
-} else {
-  #remove internal standard columns and mock samples for data other than
-  #abundance
-  excelclean<-excelclean %>%
-    select(-any_of(intstds)) %>%
-    filter(!!!sample_symbol %in% c(meta_tb %>%
-                            filter(tolower(pull(meta_tb,sampletype_column))=="blank")%>%
-                            pull(!!sample_symbol)))
-}
-
-#get data in long format if still needed, for corrected isotopologues
-#make one entry per isotopologue
-if (!long_format) {
-  excelclean<-excelclean%>%
-    pivot_longer(2:ncol(.),names_to = "compound")%>%
-    mutate(datatype=datatypename) %>%
-    mutate(
-      datatype=if_else(
-        grepl("isotopologue",tolower(datatype)),
-        paste0(datatype,substr(compound,regexpr("_",compound,fixed = T),
-                               nchar(compound))),
-        datatype),
-      compound=if_else(
-        grepl("isotopologue",tolower(datatype)),
-        substr(compound,1,regexpr("_",compound,fixed = T)-1),
-        compound)
-    )
-  
-  long_format<-T
-}
-
-
-"____"
-
-#make sure FC_position is set to slice when multiple tracer nutrients
-if (length(unique(pull(meta_formatted_tb[,tracer_column])))>1 & 
-    FC_position =="center") {
-  FC_position <- "slice"
-}
-
-#checks if the right amount of colors is set, sets right amount of default 
-#distinctive colors (amount of tracers +1 for unlabeled fraction) if not
-if (!length(unique(pull(meta_formatted_tb[,tracer_column]))) == length(col_labeling)-1){
-  if(length(unique(pull(meta_formatted_tb[,tracer_column])))==1) {
-    col_labeling<-c("#bfbfbf","#ffd966")
-  } else {
-    library(RColorBrewer)
-    col_labeling<-brewer.pal(length(unique(pull(meta_formatted_tb[,tracer_column])))+1,"Accent")
-  }
-}
-
-
+#do checks on input data
 #generate error or warning messages if any
 check_output<-check_samples_compounds(
-  meta_tb = meta_formatted_tb,
-  abund_tb = abund_tb,
-  frac_tb = frac_tb,
+  meta_tb = input_list$meta_tb,
+  abund_tb = input_list$abund_tb,
+  frac_tb = frac_worktb,
   sample_column = sample_column,
   norm_column = norm_column)
 
@@ -568,32 +357,129 @@ if (check_output$error) {
   outputtext<-check_output$message
 }
 
-#Getcompound names from input
-if (length(compounds)<length(colnames(abund_tb)[2:ncol(abund_tb)])) {
-  compounds<-colnames(abund_tb)[2:ncol(abund_tb)]
+#curate abundance data, save LOD data if present and note which compounds
+#are detected in less samples than required
+#detected too little
+abund_worktb<-input_list$abund_tb%>%
+  curate_abundancedata(meta_tb=input_list$meta_tb,sample_column = sample_column,
+                       norm_column = norm_column,
+                       sampletype_column = sampletype_column)%>%
+  select(-any_of(c(sampletype_column,norm_column)))
+
+compounds_toomany_undetected<-character(0)
+if("detected" %in% colnames(abund_worktb)){
+  abund_LODtb<-abund_worktb%>%
+    select(!!sample_symbol,compound,detected,any_of(c("LOD","LOD_blankcor")))%>%
+    group_by(compound) %>%
+    summarise(detected_fraction=length(which(detected))/n())%>%
+    left_join(
+      abund_worktb%>%
+        select(compound,any_of(c("LOD","LOD_blankcor")))%>%
+        unique(),
+      by="compound")
+  
+  compounds_toomany_undetected<-abund_LODtb%>%
+    filter(detected_fraction<minfract_detected)%>%
+    pull(compound)
+  
+  write_csv(abund_LODtb,paste0(path,"/LOD and compound detection table.csv"))
 }
+if(length(compounds_toomany_undetected)>0){
+  print(paste0("Following compounds are below LOD in more than ",
+               (1-minfract_detected)*100,"% of the samples."))
+}
+#transform abundance data to long format, saving all found types of abundance
+#with the common name
+abund_longtb<-abund_worktb%>%
+  filter(!compound %in% compounds_toomany_undetected)%>%
+  select(!!sample_symbol,
+         compound,any_of(c("Abund","BlankcorAbund","NormAbund")))%>%
+  pivot_longer(any_of(c("Abund","BlankcorAbund","NormAbund")),
+               names_to = "datatype",values_to = "value")
+
+#transform isotopologue and fraccon data to long format, saving all found types
+#of abundance with the common name, and dropping any samples or compounds not
+#in abund_longtb
+if("iso_tb"%in% names(input_list)) {
+  iso_longtb<-extract_col_isotopologues(input_list$iso_tb,
+                                        iso_suffix_sep = "_")%>%
+    select(-Isotopologue)%>%
+    filter(compound %in% abund_longtb$compound,
+           !!sample_symbol %in% pull(abund_longtb,sample_column))
+}
+
+frac_longtb<-frac_worktb %>% 
+  pivot_longer(2:ncol(.),names_to = "compound",values_to = "value")%>%
+  mutate(datatype="FracCont",.before = 3)%>%
+  filter(compound %in% abund_longtb$compound,
+         !!sample_symbol %in% pull(abund_longtb,sample_column))
+
+
+#transform metatb for joining to long tibble
+meta_tb<-input_list$meta_tb%>%
+  {
+    if(sampletype_column %in% colnames(.)) {
+      filter(.,!!sampletype_symbol != "blank")
+    } else .
+  }%>%
+  select(-any_of(c(sampletype_column,norm_column)))
+
+#join all data, keeping meta for last, then rearrange and drop unused factor
+# levels (like those of blanks!)
+tb<-full_join(abund_longtb,frac_longtb)%>%
+  full_join(iso_longtb)%>%
+  left_join(meta_tb)%>%
+  select(!!sample_symbol,any_of(colnames(meta_tb)),everything())
 
 #merge all input into one table, get compounds and factor orders
 # undebug(merge_input)
-tb<-merge_input(meta_tb = meta_formatted_tb,abund_tb = abund_tb,frac_tb = frac_tb,
-                compounds=compounds, sample_col = sample_column,
-                iso_tb=iso_tb)
+# tb<-merge_input(meta_tb = input_list$meta_tb,abund_tb = abund_tb,frac_tb = frac_tb,
+#                 compounds=compounds, sample_col = sample_column,
+#                 iso_tb=iso_tb)
 
-compounds_updated<-colnames(tb)[which(!colnames(tb)%in%
-                                        c("Sample","datatype",colnames(meta_formatted_tb)))]
+# Code pies ---------------------------------------------
+#derive variables used later on
+nutrient_symbols<-NULL
+#prepare tracer visualization parameters, correct when necessary
+#make sure FC_position is set to slice when multiple tracer nutrients
+if(length(tracer_column)>0){
+  nutrient_symbols<-rlang::syms(unique(pull(tb,any_of(tracer_column))))
+  tracernumber<-length(nutrient_symbols)
+  if (tracernumber>1 & 
+      FC_position =="center") {
+    FC_position <- "slice"
+    print(paste0("As multiple tracers are supplied, FC will be displayed in ",
+    "the slice."))
+  }
+  
+  #checks if the right amount of colors is set, sets right amount of default 
+  #distinctive colors (amount of tracers +1 for unlabeled fraction) if not
+  if (!tracernumber == length(col_labeling)-1){
+    print(paste0("Using default color scheme as for ",tracernumber," tracers ",
+                 tracernumber+1," colors are required but ",
+                 length(col_labeling), "were supplied."))
+    if(tracernumber==1) {
+      col_labeling<-c("#bfbfbf","#ffd966")
+    } else {
+      library(RColorBrewer)
+      col_labeling<-brewer.pal(tracernumber+1,"Accent")
+    }
+  }
+}
 
-# compounds_updated<-"L-Glutamate_m5"  #for checking specific compound only
 
 #make list of factor orders per factor in data to allow multiple factors
-fact_order<-list(NULL)
+fact_order<-NULL
 for (i in 1:length(factor_columns)) {
   fact_order[[i]]<-unique(pull(tb,!!factor_columns[i]))
 }
 
-# from here test code long tb ---------------------------------------------
-
 #prepare summarized table with means and p values of differences
 #of selected factor levels with desired factor order
+# undebug(prepare_piedata)
+# undebug(summarise_piedata)
+# undebug(kruskal.test)
+# undebug(kruskal_piedata)
 sum_tb<-tb %>%
   
   #Select only desired columns and filter only supported datatypes.
@@ -606,7 +492,7 @@ sum_tb<-tb %>%
   #for each comparison factor level, test differences of first factor using P value
   #if only one factor simply test differences of first factor once.
   summarise_piedata(prepare_tb,factor_column = factor_column,
-                    compar_factor_column = compar_factor_column,
+                    comparative_factor_column = comparative_factor_column,
                     tracer_column = tracer_column,fact_order = fact_order)
 
 #obtain isotopologue slice tb for plotting if isotopologues provided
@@ -635,6 +521,9 @@ if(!any(grepl("iso",tolower(sum_tb$datatype)))) {
 
 #obtain fraccont slice tb for plotting, if desired add star to cohort name if any
 #isotopologues significant if isotopologues were calculated
+debug(make_FC_slices)
+undebug(add_FClabels)
+
 FCslice_tb<- sum_tb%>%
   make_FC_slices(factor_columns=factor_columns, tracer_column = tracer_column)%>%
   {
