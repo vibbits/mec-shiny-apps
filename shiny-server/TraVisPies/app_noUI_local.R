@@ -92,7 +92,7 @@ source(here::here("Functions and modules/TraVis_Pies_functions merge isos and mu
 #set variables to NULL or none as required by functions that might not be present in data
 #and inputtype to NULL
 comparative_factor_column<-sampletype_column<-factor_column <- norm_column <- 
-  tracer_column<-inputtype<-libfile<-lib_tb<-NULL
+  tracer_column<-inputtype<-libfile<-lib_tb<-factor_levels_ordered<-NULL
 minfract_detected<-0
 
 #set variables to a default value that can be changed for specific projects
@@ -109,13 +109,17 @@ savepath<-path
 excelfile<-"example excel.xlsx"
 inputpath<-paste(path,excelfile,sep = "/")
 read_excel(inputpath,
-           which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
-                   colnames()
+           which(grepl("meta",tolower(excel_sheets(inputpath)))))
 read_excel(inputpath,
            which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
   colnames()
 sample_column <-"Sample"
 factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
+factor_levels<-read_excel(inputpath,
+           which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
+  pull(factor_column)%>%
+  unique()
+factor_levels_ordered<-factor_levels[2:4]
 norm_column <- "Normalisation"   #"None" if not present
 sampletype_column<-"sample_type"
 libfile<-"Lib_excelexample.csv"
@@ -232,7 +236,7 @@ log_abund<-F
 detail_charts<-T                      #makes images with detail for solo use
 pathway_charts<-F                        #also generate images fit for pathway 
 save_chart<-T                         #save chart images? If false plots in ID
-normalize<-(!norm_column=="None")                         #normalize abundances?
+normalize<-(length(norm_column)>0)                         #normalize abundances?
 print_tables<-F                       #print generated tables to console?
 compounds<-NULL                      #which compounds included; NULL => all
 show_P<-T                              #show P values on pie plots
@@ -424,22 +428,24 @@ meta_tb<-input_list$meta_tb%>%
   }%>%
   select(-any_of(c(sampletype_column,norm_column)))
 
-#join all data, keeping meta for last, then rearrange and drop unused factor
-# levels (like those of blanks!)
+#join all data, keeping meta for last, then  drop unused factor
+# levels and reorder them like input if specified(like those of blanks!)
+#todo turn joinin series into function
 tb<-full_join(abund_longtb,frac_longtb)%>%
   full_join(iso_longtb)%>%
   left_join(meta_tb)%>%
-  select(!!sample_symbol,any_of(colnames(meta_tb)),everything())
-
-#merge all input into one table, get compounds and factor orders
-# undebug(merge_input)
-# tb<-merge_input(meta_tb = input_list$meta_tb,abund_tb = abund_tb,frac_tb = frac_tb,
-#                 compounds=compounds, sample_col = sample_column,
-#                 iso_tb=iso_tb)
+  select(!!sample_symbol,any_of(colnames(meta_tb)),everything())%>%
+  clean_order_factors(factor_columns,factor_levels_ordered)
 
 # Code pies ---------------------------------------------
+#todo load tb, display columns, clean factors with clean_order_factors
+
+
 #derive variables used later on
+factor_columns <- c(factor_column,comparative_factor_column)
+factor_symbols<-sym_or_null(factor_columns,returnlist = T)
 nutrient_symbols<-NULL
+
 #prepare tracer visualization parameters, correct when necessary
 #make sure FC_position is set to slice when multiple tracer nutrients
 if(length(tracer_column)>0){
@@ -468,12 +474,6 @@ if(length(tracer_column)>0){
 }
 
 
-#make list of factor orders per factor in data to allow multiple factors
-fact_order<-NULL
-for (i in 1:length(factor_columns)) {
-  fact_order[[i]]<-unique(pull(tb,!!factor_columns[i]))
-}
-
 #prepare summarized table with means and p values of differences
 #of selected factor levels with desired factor order
 # undebug(prepare_piedata)
@@ -481,19 +481,20 @@ for (i in 1:length(factor_columns)) {
 # undebug(kruskal.test)
 # undebug(kruskal_piedata)
 sum_tb<-tb %>%
-  
+  # filter(compound=="(2 and/or 3-)Phosphoglyceric acid")%>%
+
   #Select only desired columns and filter only supported datatypes.
   #Extract data only for desired factor levels and set factor order
   prepare_piedata(factor_columns = factor_columns,
                   tracer_column = tracer_column,
-                  fact_order = fact_order)%>%
+                  factor_order = factor_order)%>%
   
   #summarize data per combination of compounds, factors, tracer types and data types
   #for each comparison factor level, test differences of first factor using P value
   #if only one factor simply test differences of first factor once.
   summarise_piedata(prepare_tb,factor_column = factor_column,
                     comparative_factor_column = comparative_factor_column,
-                    tracer_column = tracer_column,fact_order = fact_order)
+                    tracer_column = tracer_column,factor_order = factor_order)
 
 #obtain isotopologue slice tb for plotting if isotopologues provided
 isos_calculated<-F
@@ -521,7 +522,7 @@ if(!any(grepl("iso",tolower(sum_tb$datatype)))) {
 
 #obtain fraccont slice tb for plotting, if desired add star to cohort name if any
 #isotopologues significant if isotopologues were calculated
-debug(make_FC_slices)
+undebug(make_FC_slices)
 undebug(add_FClabels)
 
 FCslice_tb<- sum_tb%>%
@@ -539,10 +540,12 @@ FCslice_tb<- sum_tb%>%
     }
   }
 
-selected_compound<-compounds[1]
+selected_compound<-unique(FCslice_tb$compound)[1]
 
 # debug(make_piechart)
-make_piechart(FCslice_tb,factor_columns = factor_columns,
+make_piechart(FCslice_tb %>%
+                filter(as.numeric(gsub("*","",cohort,fixed=T))<2),
+              factor_columns = factor_columns,
               tracer_column = tracer_column,
               log_abund=log_abund,
               circlelinecolor = circlelinecolor,selected_compound=selected_compound,
@@ -577,7 +580,7 @@ generate_multiple_pies(tb,compounds=compounds_updated,
                        normalize=normalize,
                        factor_columns=factor_columns,
                        tracer_column=tracer_column,
-                       fact_order=fact_order, 
+                       factor_order=factor_order, 
                        P_isotopologues=P_isotopologues,
                        log_abund=log_abund,
                        label_decimals=label_decimals,

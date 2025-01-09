@@ -808,13 +808,50 @@ check_samples_compounds<-function(meta_tb,abund_tb,frac_tb,sample_column,
 #   return(tb)
 # }  
 
+#make list of factor orders per factor in data to allow multiple factors
+#apply preselection of factor levels if desired, and order as supplied
+clean_order_factors<-function(tb,factor_columns,factor_order=NULL) {
+  factor_symbols<-sym_or_null(factor_columns,returnlist = T)
+  
+  if(length(factor_symbols)>0) {
+    for(i in 1:length(factor_symbols)) {
+      # select only given factor levels, then drops unused levels
+      if(length(factor_order[[i]])==0){
+        factor_order[[i]]<-unique(pull(tb,!!factor_symbols[[i]]))
+      }
+      tb<-tb %>%
+        filter(!!factor_symbols[[i]] %in% factor_order[[i]]) %>%
+        droplevels() %>%
+        
+        #Just in case factor is still in a character variable,
+        #Change factor variable from text into actual factor for visualisation and
+        #significance testing, then arrange data order to match the factor levels
+        mutate(!!factor_symbols[[i]]:=factor(!!factor_symbols[[i]],
+                                             levels = factor_order[[i]]))%>%
+        arrange(!!factor_symbols[[i]])
+    }
+  } else {
+    tb<-tb %>%
+      droplevels()
+  }
+  return(tb)
+}
+
+#join all data, keeping meta for last, then  drop unused factor
+# levels and reorder them like input if specified(like those of blanks!)
+# tb<-full_join(abund_longtb,frac_longtb)%>%
+#   full_join(iso_longtb)%>%
+#   left_join(meta_tb)%>%
+#   select(!!sample_symbol,any_of(colnames(meta_tb)),everything())%>%
+#   clean_order_factors(factor_columns,factor_order)
+
 #Select only desired columns and filter only supported datatypes.
 #Extract data only for desired factor levels and set factor order
 #need to use !! for dynamic variable names in tidyverse selection
 #see https://stackoverflow.com/questions/50537164/summarizing-by-dynamic-column-name-in-dplyr 
 prepare_piedata<-function(tb,sample_column="Sample",factor_columns,
                           tracer_column,
-                          fact_order=unique(pull(tb,!!factor_columns))){
+                          factor_order=unique(pull(tb,!!factor_columns))){
   #prepare factor name symbol to use as target column name for mutate
   #select only one compound, filter to include normalized or non normalized
   # abundances
@@ -832,13 +869,14 @@ prepare_piedata<-function(tb,sample_column="Sample",factor_columns,
     for(i in 1:length(factor_symbols)) {
       # select only given factor levels, then drops unused levels
       compound_tb<-compound_tb %>%
-        filter(!!factor_symbols[[i]] %in% fact_order[[i]]) %>%
+        filter(!!factor_symbols[[i]] %in% factor_order[[i]]) %>%
         droplevels() %>%
         
+        #Just in case factor is loaded as character,
         #Change factor variable from text into actual factor for visualisation and
         #significance testing, then arrange data order to match the factor levels
         mutate(!!factor_symbols[[i]]:=factor(!!factor_symbols[[i]],
-                                          levels = fact_order[[i]]))%>%
+                                          levels = factor_order[[i]]))%>%
         arrange(!!factor_symbols[[i]])
     }
   }
@@ -848,19 +886,19 @@ prepare_piedata<-function(tb,sample_column="Sample",factor_columns,
 
 #function for generating krusal results in tibble format per cohort
 #compared to reference cohort which is the first in the factor
-kruskal_piedata<-function(data,test_formula,factor_column,fact_order){
+kruskal_piedata<-function(data,test_formula,factor_column,factor_order){
   #make symbol for selection
   factor_symbol<-rlang::sym(factor_column)
   
   test_formula<-as.formula(paste0("value ~ ",factor_column))
-  ref_cohort<-fact_order[[1]][1]
-  kwtest_results<-tibble(!!factor_symbol:=fact_order[[1]][-1],
+  ref_cohort<-factor_order[[1]][1]
+  kwtest_results<-tibble(!!factor_symbol:=factor_order[[1]][-1],
                          p.value=NA)
-  for(i in 2:length(fact_order[[1]])){
-    tgt_cohort<-fact_order[[1]][i]
+  for(i in 2:length(factor_order[[1]])){
+    tgt_cohort<-factor_order[[1]][i]
     partdata<-data %>% filter(!!factor_symbol %in% c(ref_cohort,tgt_cohort))
     kwtest_results<-kwtest_results %>%
-      mutate(p.value=if_else(!!factor_symbol==i,
+      mutate(p.value=if_else(!!factor_symbol==tgt_cohort,
                              kruskal.test(formula=test_formula,data=partdata)$p.value,
                              p.value))
   }
@@ -874,7 +912,7 @@ kruskal_piedata<-function(data,test_formula,factor_column,fact_order){
 #todo make sure it supports no factor and no tracer as well
 summarise_piedata<-function(prepare_tb,abund_string="abun",factor_column,
                             comparative_factor_column=NULL,tracer_column,
-                            fact_order
+                            factor_order
 ) {
   #test
   if(length(factor_columns)>2 ) stop("More than two factors were supplied")
@@ -906,9 +944,9 @@ summarise_piedata<-function(prepare_tb,abund_string="abun",factor_column,
     select(-estimate,-std.error,-statistic) %>%
     filter(!term=="(Intercept)")%>%
     mutate(term=if_else(term=="(Intercept)",
-                        fact_order[[1]][1],
+                        factor_order[[1]][1],
                         gsub(factor_column,"",term)),
-           term=factor(term,levels=fact_order[[1]]))%>%
+           term=factor(term,levels=factor_order[[1]]))%>%
     rename(!!factor_symbol:=term)%>%
     right_join(
       prepare_tb %>%
@@ -936,7 +974,7 @@ summarise_piedata<-function(prepare_tb,abund_string="abun",factor_column,
       data=data,
       test_formula= as.formula(paste0("value ~ ",factor_column)),
       factor_column = factor_column,
-      fact_order = fact_order)))%>%
+      factor_order = factor_order)))%>%
     reframe(mod)%>%
     mutate(p.value=if_else(is.nan(p.value),
                            NA,
@@ -1113,18 +1151,28 @@ make_iso_slices<-function(sum_tb,factor_columns,tracer_column){
 make_FC_slices<-function(sum_tb,factor_columns,tracer_column){
   
   #get symbols factor and tracer; and each tracer nutrient used
-  #prepare factor and tracer symbols
+  #prepare factor and tracer symbols. Need a placeholder at the start if no
+  #tracer information was provided
   factor_symbols<-sym_or_null(factor_columns,returnlist = T)
+  if(length(tracer_column)==0){
+    tracer_column<-"Labeling"
+    sum_tb<-sum_tb %>%
+      mutate(Labeling="Labeled")
+  }
   tracer_symbol<-sym_or_null(tracer_column)
-  if(length(tracer_symbol)>0) {
-    nutrient_symbols<-sum_tb%>%
-      filter(grepl("frac",tolower(datatype),fixed = T)) %>%
-      pull(tracer_column)%>%
-      unique()%>%
-      rlang::syms()
-  } else nutrient_symbols<-NULL
+  nutrient_symbols<-sum_tb%>%
+    filter(grepl("frac",tolower(datatype),fixed = T)) %>%
+    pull(tracer_column)%>%
+    unique()%>%
+    rlang::syms()
+
   
-  sum_tb%>%
+  #take fractional contribution data only, join abundances or if desired
+  #normalized abundances to it, calculate the fractions as abundance*fraccon
+  #for each tracer, and assume a single unnamed tracer when no
+  #tracer column is provided. Rejoin the fraccon p values and add labels for
+  #for the plots
+  test<-sum_tb%>%
     filter(grepl("frac",tolower(datatype),fixed = T)) %>%
     rename(FracCont=average,P_FC=P)%>%
     left_join(
@@ -1148,24 +1196,20 @@ make_FC_slices<-function(sum_tb,factor_columns,tracer_column){
     select(-P_FC,-FracCont)%>%
     {
       if (length(tracer_symbol)>0) {
-        pivot_wider(.,names_from = !!tracer_symbol,values_from = Fraction)
+        pivot_wider(.,names_from = !!tracer_symbol,values_from = Fraction)%>%
+          rowwise()%>%
+          mutate(Unlabeled=Abund-sum(!!!nutrient_symbols,na.rm = T))%>%
+          pivot_longer(c(!!!nutrient_symbols,Unlabeled),names_to=tracer_column,
+                       values_to="Fraction")
       } else {
-        rename(.,Labeled=Fraction)
-      }
-    }%>%
-    rowwise()%>%
-    mutate(Unlabeled=Abund-sum(!!!nutrient_symbols,na.rm = T))%>%
-    {
-      if (length(tracer_symbol)>0) {
-        pivot_longer(c(!!!nutrient_symbols,Unlabeled),names_to=tracer_column,
-                     values_to="Fraction")
-      } else {
-        pivot_longer(c(!!!nutrient_symbols,Unlabeled),names_to=tracer_column,
-                     values_to="Fraction")
+        rename(.,Labeled=Fraction) %>%
+          rowwise()%>%
+          mutate(Unlabeled=Abund-sum(!!!nutrient_symbols,na.rm = T))%>%
+          pivot_longer(c(Labeled,Unlabeled),names_to=Labeling,
+                       values_to="Fraction")
       }
     }%>%
     mutate(FracCont=Fraction/Abund)%>%
-    na.omit()%>%
     left_join(
       sum_tb%>%
         rename(P_FC=P) %>%
@@ -1201,7 +1245,11 @@ make_piechart<-function(slice_tb,selected_compound,tracer_column=tracer_column,
                         otherfontsize=10,font="sans",legendtitlesize=10,
                         cohortsize=12,include_legend=T,show_P=T){
     
-  tracer_symbol<-rlang::sym(tracer_column)
+  # factor_symbols<-sym_or_null(factor_columns,returnlist = T)
+  if(length(tracer_column)==0){
+    tracer_column<-"Labeling"
+  }
+  tracer_symbol<-sym_or_null(tracer_column)
   
   #extract data of selected compound only
   slice_tb <- slice_tb %>%
@@ -1358,7 +1406,7 @@ if (length(unique(pull(slice_tb[,tracer_column])))>2) {
 }
 
 make_slicetb<-function(tb,detail_charts,pathway_charts,savepath,
-                       normalize=T,factor_columns,tracer_column,fact_order,label_decimals,
+                       normalize=T,factor_columns,tracer_column,factor_order,label_decimals,
                        percent_add,FC_position,min_lab_dist,P_isotopologues,
                        log_abund,circlelinecolor,circlelinetypes,
                        maxcol_facet,include_name,col_labeling,
@@ -1391,7 +1439,7 @@ make_slicetb<-function(tb,detail_charts,pathway_charts,savepath,
   
   compound_tb<-obtain_compounddata(tb,compound,factor_columns = factor_columns,
                                    tracer_column = tracer_column,
-                                   fact_order = fact_order,
+                                   factor_order = factor_order,
                                    normalize = normalize)
   
   #either remove isotopologues or parse them into one entry per isotopologue
@@ -1472,7 +1520,7 @@ make_slicetb<-function(tb,detail_charts,pathway_charts,savepath,
 }
 
 generate_pie_old<-function(tb,compound,detail_charts,pathway_charts,savepath,
-                       normalize=T,factor_columns,tracer_column,fact_order,label_decimals,
+                       normalize=T,factor_columns,tracer_column,factor_order,label_decimals,
                        percent_add,FC_position,min_lab_dist,P_isotopologues,
                        log_abund,circlelinecolor,circlelinetypes,
                        maxcol_facet,include_name,col_labeling,
@@ -1505,7 +1553,7 @@ generate_pie_old<-function(tb,compound,detail_charts,pathway_charts,savepath,
   
   compound_tb<-obtain_compounddata(tb,compound,factor_columns = factor_columns,
                                      tracer_column = tracer_column,
-                                   fact_order = fact_order,
+                                   factor_order = factor_order,
                                    normalize = normalize)
   
   #either remove isotopologues or parse them into one entry per isotopologue
@@ -1588,7 +1636,7 @@ generate_pie_old<-function(tb,compound,detail_charts,pathway_charts,savepath,
 # Generate pie chart plot for each compound and save if requested
 generate_multiple_pies<-
   function(tb,compounds,detail_charts,pathway_charts,savepath,
-           normalize=T,factor_columns,tracer_column,fact_order,label_decimals,percent_add,
+           normalize=T,factor_columns,tracer_column,factor_order,label_decimals,percent_add,
            FC_position,min_lab_dist,P_isotopologues,log_abund,circlelinecolor,
            circlelinetypes,maxcol_facet,include_name,col_labeling,
            alpha,otherfontsize,
@@ -1603,7 +1651,7 @@ generate_multiple_pies<-
     generate_pie(tb=tb,compound=compound,detail_charts=detail_charts,
                  pathway_charts=pathway_charts,savepath=savepath,
                  normalize=normalize,factor_columns=factor_columns,
-                 tracer_column=tracer_column,fact_order=fact_order,
+                 tracer_column=tracer_column,factor_order=factor_order,
                  label_decimals=label_decimals,percent_add=percent_add,
                  FC_position=FC_position,min_lab_dist=min_lab_dist,
                  P_isotopologues=P_isotopologues,log_abund=log_abund,
@@ -1636,15 +1684,15 @@ replace_lastchar<-function(rawstring,pattern,replacement) {
 }
 
 #Generate a figure caption based on settings
-create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P,
+create_caption<-function(factor_order,log_abund,circlelinetypes,FC_position,show_P,
                          P_isotopologues) {
   #start and add factor level order
   caption<-
     paste0("Pie chart visualizations by Travis Pies applied to ",
-    length(fact_order),
+    length(factor_order),
     " cohorts: ",
            replace_lastchar(
-             paste0(fact_order,collapse = ", "),
+             paste0(factor_order,collapse = ", "),
              pattern = ",",
              replacement = " and"
            ),
@@ -1719,7 +1767,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
       caption,"pRA and pFC indicate the significance of the difference in ",
       "respectively the relative abundance (t-test) or fractional contribution ",
       "(Kruskal-Wallis) with ",
-      fact_order[1],
+      factor_order[1],
       " (* indicates a p value <0.05). "
     )
   }
@@ -1791,7 +1839,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 # # Coenzyme_A
 # v_settings<-list(compound="Coenzyme_A",
 #                  factor_columns=colnames(inputtb)[1],
-#                  fact_order=pull(unique(inputtb[,1])),
+#                  factor_order=pull(unique(inputtb[,1])),
 #                  norm=T,
 #                  percent_add=F,
 #                  FC_position="center",
@@ -1875,7 +1923,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 # generate_pie(example_tb,compound=compound,detail_charts=detail_charts,
 #              pathway_charts=pathway_charts,savepath=target_savepath,
 #              normalize=v_settings$norm,factor_columns=v_settings$factor_columns,
-#              fact_order=v_settings$fact_order,
+#              factor_order=v_settings$factor_order,
 #              P_isotopologues=v_settings$P_isotopologues,
 #              log_abund=v_settings$log_abund,
 #              label_decimals=v_settings$label_decimals,
@@ -1900,7 +1948,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 #                        detail_charts=detail_charts,
 #                        pathway_charts=pathway_charts,savepath=target_savepath,
 #                        normalize=v_settings$norm,factor_columns=v_settings$factor_columns,
-#                        fact_order=v_settings$fact_order,
+#                        factor_order=v_settings$factor_order,
 #                        P_isotopologues=v_settings$P_isotopologues,
 #                        log_abund=v_settings$log_abund,
 #                        label_decimals=v_settings$label_decimals,
@@ -1922,7 +1970,7 @@ create_caption<-function(fact_order,log_abund,circlelinetypes,FC_position,show_P
 #                        format=out_settings$format)
 
 # old tests ---------------------------------------------------------------
-# print(create_caption(fact_order = v_settings$fact_order,
+# print(create_caption(factor_order = v_settings$factor_order,
 #                log_abund = v_settings$log_abund,
 #                FC_position = v_settings$FC_position,
 #                show_P = v_settings$show_P,
