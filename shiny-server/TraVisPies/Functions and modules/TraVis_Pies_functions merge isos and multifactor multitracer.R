@@ -558,8 +558,11 @@ extract_et_isotopologues<-function(iso_et_tb){
 calculate_FC<-function(iso_tb,sample_colname="Sample"){
   sample_symbol<-rlang::sym(sample_colname)
   
-  #calculate FC table, then reformat to columnwise format
-  iso_tb %>% group_by(compound,!!sample_symbol) %>%
+  #calculate FC table, dropping values lower than 0
+  # then reformat to columnwise format
+  iso_tb %>%
+    filter(!value<0) %>%
+    group_by(compound,!!sample_symbol) %>%
     summarise(value = sum(value*Isotopologue)/max(Isotopologue))%>%
     select(!!sample_symbol,everything())%>%
     pivot_wider(names_from = compound,values_from = value)
@@ -929,6 +932,7 @@ kruskal_piedata<-function(data,test_formula,factor_column,factor_order){
   for(i in 2:length(factor_order[[1]])){
     tgt_cohort<-factor_order[[1]][i]
     partdata<-data %>% filter(!!factor_symbol %in% c(ref_cohort,tgt_cohort))
+    if(length(unique(partdata[,factor_column]))<2) next
     kwtest_results<-kwtest_results %>%
       mutate(p.value=if_else(!!factor_symbol==tgt_cohort,
                              kruskal.test(formula=test_formula,data=partdata)$p.value,

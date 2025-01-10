@@ -44,6 +44,9 @@
 #Todo nonUI
 
 #choose normalize or not when summarizing
+#make function to correct FC for negative values, reduce all positive values
+#proportional to their contribution to the total positive value to the total
+#of the amount of negative values
 #turn merging code into a single function, 
 #run code with same input either reading rds or creating first
 
@@ -98,27 +101,27 @@ labelstring<-"iso"
 minfract_detected<-0
 
 # #test  excel with labeled data
-# isostring<-"_C13-0"
-# path<-here::here("Example_data/Input Excel")
-# savepath<-path
-# excelfile<-"example excel.xlsx"
-# inputpath<-paste(path,excelfile,sep = "/")
-# read_excel(inputpath,
-#            which(grepl("meta",tolower(excel_sheets(inputpath)))))
-# read_excel(inputpath,
-#            which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
-#   colnames()
-# sample_column <-"Sample"
-# factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
-# factor_levels<-read_excel(inputpath,
-#            which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
-#   pull(factor_column)%>%
-#   unique()
-# factor_levels_ordered<-factor_levels[2:4]
-# norm_column <- "Normalisation"   #"None" if not present
-# sampletype_column<-"sample_type"
-# libfile<-"Lib_excelexample.csv"
-# lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
+isostring<-"_C13-0"
+path<-here::here("Example_data/Input Excel")
+savepath<-path
+excelfile<-"example excel.xlsx"
+inputpath<-paste(path,excelfile,sep = "/")
+read_excel(inputpath,
+           which(grepl("meta",tolower(excel_sheets(inputpath)))))
+read_excel(inputpath,
+           which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
+  colnames()
+sample_column <-"Sample"
+factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
+factor_levels<-read_excel(inputpath,
+           which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
+  pull(factor_column)%>%
+  unique()
+factor_levels_ordered<-factor_levels[2:4]
+norm_column <- "Normalisation"   #"None" if not present
+sampletype_column<-"sample_type"
+libfile<-"Lib_excelexample.csv"
+lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
 
 #test data 1-factor no replicates
 # rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Other examples for nonUI app\Bram problems 2)"
@@ -208,20 +211,20 @@ minfract_detected<-0
 
 #test data 2-factor different tracers
 
-rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
-inputpath<-path<-gsub("\\\\", "/", rawpath)
-inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor multitracer")
-savepath<-path
-list.files(inputpath)
-metastring<-"2factor_multitrace_metadata.csv"
-abundstring<-"2factor_multitrace_RA.csv"
-labelstring<-"2factor_multitrace_FC.csv"
-loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
-sample_column <-"Sample"
-factor_column <- "Condition"   #"None" if not present
-comparative_factor_column <- "Supplementation"   #"None" if not present, factor on each level of which the first factor is compared
-norm_column <- "Normalisation"   #"None" if not present
-tracer_column <-"Tracer"                #"None" if not present
+# rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
+# inputpath<-path<-gsub("\\\\", "/", rawpath)
+# inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor multitracer")
+# savepath<-path
+# list.files(inputpath)
+# metastring<-"2factor_multitrace_metadata.csv"
+# abundstring<-"2factor_multitrace_RA.csv"
+# labelstring<-"2factor_multitrace_FC.csv"
+# loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
+# sample_column <-"Sample"
+# factor_column <- "Condition"   #"None" if not present
+# comparative_factor_column <- "Supplementation"   #"None" if not present, factor on each level of which the first factor is compared
+# norm_column <- "Normalisation"   #"None" if not present
+# tracer_column <-"Tracer"                #"None" if not present
 
 
 #Miscellaneous
@@ -237,7 +240,7 @@ show_P<-T                              #show P values on pie plots
 
 #figure appearance parameters
 #any color input recognized by ggplot2::scale_fill_manual can be used
-col_labeling<-c("#bfbfbf","#ffd966")   #colors for labeled and unlabeled fraction 
+col_labeling<-c("#ffd966","#bfbfbf")   #colors for labeled and unlabeled fraction 
 # col_labeling<-c("#bfbfbf","#ffd966","lightblue")   #colors for 2 tracers and unlabeled fraction
 maxcol_facet<-3                       #maximum amount of images horizontal
 include_name<-T                        #include compound name on figure
@@ -464,7 +467,20 @@ if(length(tracer_column)>0){
                  tracernumber+1," colors are required but ",
                  length(col_labeling), "were supplied."))
     if(tracernumber==1) {
-      col_labeling<-c("#bfbfbf","#ffd966")
+      col_labeling<-c("#ffd966","#bfbfbf")
+    } else {
+      library(RColorBrewer)
+      col_labeling<-brewer.pal(tracernumber+1,"Accent")
+    }
+  }
+} else if("FracCont" %in% tb$datatype) {
+  tracernumber<-1
+  if (!tracernumber == length(col_labeling)-1){
+    print(paste0("Using default color scheme as for ",tracernumber," tracers ",
+                 tracernumber+1," colors are required but ",
+                 length(col_labeling), "were supplied."))
+    if(tracernumber==1) {
+      col_labeling<-c("#ffd966","#bfbfbf")
     } else {
       library(RColorBrewer)
       col_labeling<-brewer.pal(tracernumber+1,"Accent")
@@ -475,14 +491,16 @@ if(length(tracer_column)>0){
 
 #prepare summarized table with means and p values of differences
 #of selected factor levels with desired factor order
-undebug(prepare_piedata)
+# undebug(prepare_piedata)
 # undebug(kruskal.test)
-undebug(kruskal_piedata)
-undebug(clean_order_factors)
-undebug(summarise_piedata)
+debug(kruskal_piedata)
+# undebug(clean_order_factors)
+# undebug(summarise_piedata)
 
+#todo for some reason fraccon and isotopologue data kruskal wallis is 
+#not working because all cohorts are the same??
 sum_tb<-tb %>%
-  # filter(compound=="(2 and/or 3-)Phosphoglyceric acid")%>%
+  filter(compound=="(2 and/or 3-)Phosphoglyceric acid")%>%
 
   #Select only desired columns and filter only supported datatypes.
   #Extract data only for desired factor levels and set factor order
@@ -525,8 +543,8 @@ if(!any(grepl("iso",tolower(sum_tb$datatype)))) {
 
 #obtain fraccont slice tb for plotting, if desired add star to cohort name if any
 #isotopologues significant if isotopologues were calculated
-undebug(make_FC_slices)
-debug(add_FClabels)
+# undebug(make_FC_slices)
+# undebug(add_FClabels)
 
 FCslice_tb<- sum_tb%>%
   make_FC_slices(factor_columns=factor_columns, tracer_column = tracer_column)%>%
@@ -560,17 +578,17 @@ make_piechart(FCslice_tb,
               show_P=show_P)
 
 #todo make it work for isotopologue pies
-# make_piechart(isoslice_tb,factor_columns = factor_columns,
-#               tracer_column = "Isotopologue",
-#               log_abund=log_abund,
-#               circlelinecolor = circlelinecolor,selected_compound=selected_compound,
-#               circlelinetypes = circlelinetypes,
-#               maxcol_facet = maxcol_facet,
-#               include_name = include_name,col_labeling = NULL,
-#               alpha=alpha,font=font,otherfontsize = otherfontsize,
-#               legendtitlesize =legendtitlesize,
-#               cohortsize = cohortsize,include_legend = include_legend,
-#               show_P=show_P)
+make_piechart(isoslice_tb,factor_columns = factor_columns,
+              tracer_column = "Isotopologue",
+              log_abund=log_abund,
+              circlelinecolor = circlelinecolor,selected_compound=selected_compound,
+              circlelinetypes = circlelinetypes,
+              maxcol_facet = maxcol_facet,
+              include_name = include_name,col_labeling = NULL,
+              alpha=alpha,font=font,otherfontsize = otherfontsize,
+              legendtitlesize =legendtitlesize,
+              cohortsize = cohortsize,include_legend = include_legend,
+              show_P=show_P)
 
 
 
