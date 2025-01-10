@@ -43,6 +43,7 @@
 
 #Todo nonUI
 
+#choose normalize or not when summarizing
 #turn merging code into a single function, 
 #run code with same input either reading rds or creating first
 
@@ -478,7 +479,7 @@ undebug(prepare_piedata)
 # undebug(kruskal.test)
 undebug(kruskal_piedata)
 undebug(clean_order_factors)
-debug(summarise_piedata)
+undebug(summarise_piedata)
 
 sum_tb<-tb %>%
   # filter(compound=="(2 and/or 3-)Phosphoglyceric acid")%>%
@@ -507,6 +508,7 @@ if(!any(grepl("iso",tolower(sum_tb$datatype)))) {
         "This is not supported currently, isotopologue data will be ignored"))
 } else {
   isoslice_tb<- sum_tb%>%
+    
     make_iso_slices(factor_columns=factor_columns, tracer_column = tracer_column)
   
   signi_iso_tb<-isoslice_tb%>%
@@ -524,7 +526,7 @@ if(!any(grepl("iso",tolower(sum_tb$datatype)))) {
 #obtain fraccont slice tb for plotting, if desired add star to cohort name if any
 #isotopologues significant if isotopologues were calculated
 undebug(make_FC_slices)
-undebug(add_FClabels)
+debug(add_FClabels)
 
 FCslice_tb<- sum_tb%>%
   make_FC_slices(factor_columns=factor_columns, tracer_column = tracer_column)%>%
@@ -558,75 +560,20 @@ make_piechart(FCslice_tb,
               show_P=show_P)
 
 #todo make it work for isotopologue pies
-make_piechart(isoslice_tb,factor_columns = factor_columns,
-              tracer_column = "Isotopologue",
-              log_abund=log_abund,
-              circlelinecolor = circlelinecolor,selected_compound=selected_compound,
-              circlelinetypes = circlelinetypes,
-              maxcol_facet = maxcol_facet,
-              include_name = include_name,col_labeling = NULL,
-              alpha=alpha,font=font,otherfontsize = otherfontsize,
-              legendtitlesize =legendtitlesize,
-              cohortsize = cohortsize,include_legend = include_legend,
-              show_P=show_P)
+# make_piechart(isoslice_tb,factor_columns = factor_columns,
+#               tracer_column = "Isotopologue",
+#               log_abund=log_abund,
+#               circlelinecolor = circlelinecolor,selected_compound=selected_compound,
+#               circlelinetypes = circlelinetypes,
+#               maxcol_facet = maxcol_facet,
+#               include_name = include_name,col_labeling = NULL,
+#               alpha=alpha,font=font,otherfontsize = otherfontsize,
+#               legendtitlesize =legendtitlesize,
+#               cohortsize = cohortsize,include_legend = include_legend,
+#               show_P=show_P)
 
 
 
-
-generate_multiple_pies(tb,compounds=compounds_updated,
-                       detail_charts=detail_charts,
-                       pathway_charts=pathway_charts,
-                       savepath=savepath,
-                       normalize=normalize,
-                       factor_columns=factor_columns,
-                       tracer_column=tracer_column,
-                       factor_order=factor_order, 
-                       P_isotopologues=P_isotopologues,
-                       log_abund=log_abund,
-                       label_decimals=label_decimals,
-                       percent_add=percent_add,
-                       FC_position=FC_position,
-                       min_lab_dist=min_lab_dist,
-                       circlelinecolor=circlelinecolor,
-                       circlelinetypes=circlelinetypes,
-                       maxcol_facet=maxcol_facet,
-                       include_name=include_name,
-                       show_P=show_P,
-                       col_labeling=col_labeling,
-                       alpha=alpha,
-                       otherfontsize=otherfontsize,
-                       font=font,
-                       legendtitlesize=legendtitlesize,
-                       cohortsize=cohortsize,
-                       include_legend=include_legend,
-                       format=format,
-                       mapotherfontsize=mapotherfontsize,
-                       mapcohortsize=mapcohortsize)
-
-
-# debug(corFC_addUnlab)
-# undebug(corFC_addUnlab)
-# 
-# debug(prepare_slicedata)
-# undebug(prepare_slicedata)
-# 
-# debug(add_FClabels)
-# undebug(add_FClabels)
-# 
-# debug(summarize_compounddata)
-# undebug(summarize_compounddata)
-# 
-# debug(summarize_addP)
-# undebug(summarize_addP)
-# 
-# debug(generate_pie)
-# undebug(generate_pie)
-# 
-# debug(make_piechart)
-# undebug(make_piechart)
-# 
-# debug(obtain_compounddata)
-# undebug(obtain_compounddata)
 
 
 # code saved for later figures from summarized longtb---------------------------------------------------------------------

@@ -1105,6 +1105,9 @@ add_FClabels<-function(sum_tb,fraction_column,label_decimals,percent_add,factor_
     #Get label, set to ND if not detected in any sample in group. Set label
     #of unlabeled fraction to empty if labeling is requested in center
     mutate(!!fraction_symbol:=round(!!fraction_symbol,label_decimals+2),
+           !!fraction_symbol:=if_else(is.na(!!fraction_symbol),
+                                      0,
+                                      !!fraction_symbol),
            labFC=if_else(FC_position=="slice" & !!fraction_symbol==0,
                          paste0("<",10^-label_decimals/2),
                          as.character(!!fraction_symbol*100)),
@@ -1122,8 +1125,8 @@ add_FClabels<-function(sum_tb,fraction_column,label_decimals,percent_add,factor_
     #preceding FC's-half the current FC. Set posAb in slice at min_lab_dist radius 
     #if abundance smaller than twice min_lab_dist. 
     mutate(FClab_posAngle=if_else(FC_position=="center"|Abund==0,0,
-                                  cumsum(!!fraction_symbol)-!!fraction_symbol/2),
-           FClab_posDist=if_else(FC_position=="center"|Abund==0|!!fraction_symbol==1,
+                                  -cumsum(!!fraction_symbol)+!!fraction_symbol/2),
+  FClab_posDist=if_else(FC_position=="center"|Abund==0|!!fraction_symbol==1,
                                  as.double(0),
                                  if_else(Abund<min_lab_dist*2,
                                          as.double(min_lab_dist),
@@ -1138,8 +1141,10 @@ make_iso_slices<-function(sum_tb,factor_columns,tracer_column){
   #get symbols factor and tracer; and each tracer nutrient used
   factor_symbols<-rlang::syms(factor_columns)
   
+  # only keep fractions larger than 0
   sum_tb%>%
-    filter(grepl("iso",tolower(datatype),fixed = T)) %>%
+    filter(grepl("iso",tolower(datatype),fixed = T),
+           average>0) %>%
     rename(IsoCont=average,P_FC=P,Fraction=!!tracer_column)%>%
     left_join(
       sum_tb%>%
@@ -1212,13 +1217,15 @@ make_FC_slices<-function(sum_tb,factor_columns,tracer_column){
     rlang::syms()
 
   
-  #take fractional contribution data only, join abundances or if desired
+  #take fractional contribution data only, keep only slices above 0
+  # join abundances or if desired
   #normalized abundances to it, calculate the fractions as abundance*fraccon
   #for each tracer, and assume a single unnamed tracer when no
   #tracer column is provided. Rejoin the fraccon p values and add labels for
   #for the plots
-  test<-sum_tb%>%
-    filter(grepl("frac",tolower(datatype),fixed = T)) %>%
+  sum_tb%>%
+    filter(grepl("frac",tolower(datatype),fixed = T),
+           average>0) %>%
     rename(FracCont=average,P_FC=P)%>%
     left_join(
       sum_tb%>%
@@ -1290,15 +1297,16 @@ make_piechart<-function(slice_tb,selected_compound,tracer_column=tracer_column,
                         otherfontsize=10,font="sans",legendtitlesize=10,
                         cohortsize=12,include_legend=T,show_P=T){
     
-  # factor_symbols<-sym_or_null(factor_columns,returnlist = T)
   if(length(tracer_column)==0){
     tracer_column<-"Labeling"
   }
   tracer_symbol<-sym_or_null(tracer_column)
   
-  #extract data of selected compound only
+  #extract data of selected compound only, keep only fractions above 0
+  #turn tracer column into factor
   slice_tb <- slice_tb %>%
-    filter(compound==selected_compound)%>%
+    filter(compound==selected_compound,
+           Fraction>0)%>%
     mutate(!!tracer_symbol:=factor(!!tracer_symbol))
   
   #create starting barplot. X= halved abundances required, take log if requested
@@ -1308,7 +1316,7 @@ make_piechart<-function(slice_tb,selected_compound,tracer_column=tracer_column,
     #set minimal value to include on log axis, changing not recommended
     #and calculate minimal position distance on new scale
     minvalue<-0.0001
-
+    
     #width can only be symmetric, so modify abundance to the value on normal 
     #scale corresponding to average of log scale minimal limit 
     #and logscale abundance, and abundance width to the difference of the log 
@@ -1357,26 +1365,26 @@ make_piechart<-function(slice_tb,selected_compound,tracer_column=tracer_column,
   if (include_name) plotrect<-plotrect+ggtitle(selected_compound)
   if(length(col_labeling)>0) {
     plotrect<-plotrect  +
-      scale_fill_manual(values=col_labeling,guide=guide_legend(reverse=T))
+      scale_fill_manual(values=col_labeling,guide=guide_legend(reverse=F))
   } else {
     plotrect<-plotrect  +
       scale_fill_discrete()
-      # scale_fill_manual(values=col_labeling,guide=guide_legend(reverse=T))
+    # scale_fill_manual(values=col_labeling,guide=guide_legend(reverse=T))
   }
   
-
+  
   #positions of text at specified locations. GGrepel used when multiple tracer
   # to avoid labels overlapping. Fontsize needs to be adjusted for reasons:
   #https://stackoverflow.com/questions/25061822/ggplot-geom-text-font-size-control
-  plotrect<-plotrect  +
-    geom_text(aes(label=labFC),x = slice_tb$FClab_posDist,
-              y=slice_tb$FClab_posAngle,size=otherfontsize*5/14)
+  # plotrect<-plotrect  +
+  #   geom_text(aes(label=labFC),x = slice_tb$FClab_posDist,
+  #             y=slice_tb$FClab_posAngle,size=otherfontsize*5/14)
   if (show_P) {
     plotrect<-plotrect  +
       geom_text(aes(label=P_RAlab),x=1.6,y=7/8,size=otherfontsize*5/14,
                 hjust="inward",vjust="inward")
-
-if (length(unique(pull(slice_tb[,tracer_column])))>2) {
+    
+    if (length(unique(pull(slice_tb[,tracer_column])))>2) {
       plotrect<-plotrect  +
         geom_text_repel(data=slice_tb,
                         aes(label=paste0(labFC,P_FClab)),
@@ -1408,22 +1416,23 @@ if (length(unique(pull(slice_tb[,tracer_column])))>2) {
                   hjust="inward",vjust="inward",family=font)      
     }
   }
-
-   #transform bar to pie chart and plot pies on grid, depending on amount of 
+  
+  plotrect
+  #transform bar to pie chart and plot pies on grid, depending on amount of 
   #factors.
-  if(length(factor_columns)!=2) {
+  if(length(factor_columns)<2) {
     piebasic<-plotrect+
       facet_wrap(vars(!!rlang::sym(factor_columns)),ncol=maxcol_facet) +
-      coord_polar("y", start = 0, direction = 1)
+      coord_polar("y", start = 0, direction = -1)
   } else {
     gridformula<-as.formula(paste0(factor_columns[2],"~",factor_columns[1]))
     #switch="both" to set labels to same side as axis titles
     piebasic<-plotrect+
       facet_grid(gridformula,switch="both") +   
-      coord_polar("y", start = 0, direction = 1)
+      coord_polar("y", start = 0, direction = -1)
   }
-
-
+  
+  
   #apply final formatting to pie plots. Removes x and y labels entirely,
   #including the space reserved for them on the plot
   #sets relative abundance p values in upper right corner of pie plots
@@ -1443,10 +1452,10 @@ if (length(unique(pull(slice_tb[,tracer_column])))>2) {
           legend.title = element_text(size = legendtitlesize),
           strip.background = element_rect(fill = NA, colour = NA),
           strip.text = element_text(size = cohortsize))
-
+  
   #removes legend if desired
   if (!include_legend) pies <-pies + theme(legend.position = "none")
-
+  
   return(pies)
 }
 
