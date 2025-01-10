@@ -191,7 +191,7 @@ format_metadata<-function(meta_tb,sample_column,factor_columns=NULL,
                     !!norm_symbol,
                     as.numeric),
                   across(
-                    !!!factor_symbols,
+                    c(!!!factor_symbols),
                     as.factor)
                   )%>%
     select(where(~ !all(is.na(.))),!!sample_symbol,!!!factor_symbols,
@@ -221,7 +221,12 @@ loadfile_stringmatch<-function(path,filestring){
 #detect if labeling is isotopologues or fractional contribution,
 #sanitazing metabolite names as required for later functions depending on
 #labeling type
-is_isodata<-function(label_tb,isostring){
+is_isodata<-function(label_tb,isostring=NULL){
+  if(length(isostring)==0){
+    print(paste0("No isostring provided, assuming labeling data is fractional",
+    " contribution."))
+    return(F)
+  }
   isocols<-colnames(label_tb)[
     grepl(tolower(isostring),tolower(colnames(label_tb)))]
   if(length(isocols)>0){
@@ -232,7 +237,7 @@ is_isodata<-function(label_tb,isostring){
     print(paste0("If this is fractional contribution data, set isostring to ",
                  "a different string not present in metabolite names to avoid ",
                  "errors."))
-    is_tb_isodata<-T
+    return(T)
   } else {
     print(paste0("The isostring `",isostring,"` is not found ",
                  "in any column names in the labeling tb, ",
@@ -240,10 +245,8 @@ is_isodata<-function(label_tb,isostring){
                  "data. If this is isotoplogue data, set ",
                  "isostring to a different string unique ",
                  "to isotopologue names to avoid errors"))
-    is_tb_isodata<-F
+    return(F)
   }
-  
-  return(is_tb_isodata)
 }
 
 #rename compounds in colnames (incl isotopologue data) based on library
@@ -813,16 +816,25 @@ check_samples_compounds<-function(meta_tb,abund_tb,frac_tb,sample_column,
 clean_order_factors<-function(tb,factor_columns,factor_order=NULL) {
   factor_symbols<-sym_or_null(factor_columns,returnlist = T)
   
+  #if factor order is supplied as a vector, assume it is only the order
+  #of the first factor
+  if(length(factor_order)>0 & !is.list(factor_order)){
+    factor_order<-list(factor_order)
+  }
+    
   if(length(factor_symbols)>0) {
     for(i in 1:length(factor_symbols)) {
-      # select only given factor levels, then drops unused levels
-      if(length(factor_order[[i]])==0){
-        factor_order[[i]]<-unique(pull(tb,!!factor_symbols[[i]]))
+      #if factor order is not given, just assume levels and order already
+      #in data
+      if(length(factor_order)<i){
+          factor_order[[i]]<-unique(pull(tb,!!factor_symbols[[i]]))
       }
+      # if(length(factor_order[[i]])==0){
+      # } 
+      # select only given factor levels
       tb<-tb %>%
         filter(!!factor_symbols[[i]] %in% factor_order[[i]]) %>%
-        droplevels() %>%
-        
+
         #Just in case factor is still in a character variable,
         #Change factor variable from text into actual factor for visualisation and
         #significance testing, then arrange data order to match the factor levels
@@ -830,20 +842,27 @@ clean_order_factors<-function(tb,factor_columns,factor_order=NULL) {
                                              levels = factor_order[[i]]))%>%
         arrange(!!factor_symbols[[i]])
     }
-  } else {
-    tb<-tb %>%
-      droplevels()
   }
-  return(tb)
+  
+  #return result after dropping unused factor levels
+  return(tb%>%
+           droplevels())
 }
 
 #join all data, keeping meta for last, then  drop unused factor
 # levels and reorder them like input if specified(like those of blanks!)
-# tb<-full_join(abund_longtb,frac_longtb)%>%
-#   full_join(iso_longtb)%>%
-#   left_join(meta_tb)%>%
-#   select(!!sample_symbol,any_of(colnames(meta_tb)),everything())%>%
-#   clean_order_factors(factor_columns,factor_order)
+join_metabo_longdata<-function(abund_longtb,frac_longtb,iso_longtb=NULL,meta_tb,
+                    sample_column){
+  tb<-full_join(abund_longtb,frac_longtb)%>%
+    {
+      if(length(iso_longtb)>0){
+        full_join(.,iso_longtb)
+      } else .
+    }%>%
+    left_join(meta_tb)%>%
+    select(!!sample_symbol,any_of(colnames(meta_tb)),everything())
+}
+
 
 #Select only desired columns and filter only supported datatypes.
 #Extract data only for desired factor levels and set factor order
@@ -851,13 +870,19 @@ clean_order_factors<-function(tb,factor_columns,factor_order=NULL) {
 #see https://stackoverflow.com/questions/50537164/summarizing-by-dynamic-column-name-in-dplyr 
 prepare_piedata<-function(tb,sample_column="Sample",factor_columns,
                           tracer_column,
-                          factor_order=unique(pull(tb,!!factor_columns))){
+                          factor_order=NULL){
   #prepare factor name symbol to use as target column name for mutate
   #select only one compound, filter to include normalized or non normalized
   # abundances
   sample_symbol<-sym_or_null(sample_column,allownull = F)
   factor_symbols<-sym_or_null(factor_columns,returnlist = T)
   tracer_symbol<-sym_or_null(tracer_column)
+  
+  #if factor order is supplied as a vector, assume it is only the order
+  #of the first factor
+  if(length(factor_order)>0 & !is.list(factor_order)){
+    factor_order<-list(factor_order)
+  }
 
   #select only desired and present columns, keep only supported datatypes
   compound_tb<-tb %>% select(!!sample_symbol,!!!factor_symbols,!!tracer_symbol,
@@ -867,14 +892,21 @@ prepare_piedata<-function(tb,sample_column="Sample",factor_columns,
   
   if(length(factor_symbols)>0) {
     for(i in 1:length(factor_symbols)) {
+      #if factor order is not given, just assume levels and order already
+      #in data
+      if(length(factor_order)<i){
+        factor_order[[i]]<-unique(pull(tb,!!factor_symbols[[i]]))
+      }
+      
       # select only given factor levels, then drops unused levels
       compound_tb<-compound_tb %>%
-        filter(!!factor_symbols[[i]] %in% factor_order[[i]]) %>%
-        droplevels() %>%
+        clean_order_factors(factor_columns = factor_columns[i],
+                            factor_order[i]) %>%
         
         #Just in case factor is loaded as character,
-        #Change factor variable from text into actual factor for visualisation and
-        #significance testing, then arrange data order to match the factor levels
+        #Change factor variable from text into actual factor for visualisation
+        #and significance testing, then arrange data order to match the factor
+        #levels
         mutate(!!factor_symbols[[i]]:=factor(!!factor_symbols[[i]],
                                           levels = factor_order[[i]]))%>%
         arrange(!!factor_symbols[[i]])
@@ -912,11 +944,10 @@ kruskal_piedata<-function(data,test_formula,factor_column,factor_order){
 #todo make sure it supports no factor and no tracer as well
 summarise_piedata<-function(prepare_tb,abund_string="abun",factor_column,
                             comparative_factor_column=NULL,tracer_column,
-                            factor_order
-) {
+                            factor_order)
+  {
   #test
   if(length(factor_columns)>2 ) stop("More than two factors were supplied")
-  # if(length(factor_columns)==0) stop("No factors were supplied")
   
   #prepare factor and tracer symbols
   factor_columns <- c(factor_column,comparative_factor_column)
@@ -926,11 +957,25 @@ summarise_piedata<-function(prepare_tb,abund_string="abun",factor_column,
   factor_symbols<-sym_or_null(factor_columns,returnlist = T)
   tracer_symbol<-sym_or_null(tracer_column)
   
+  #if factor order is supplied as a vector, assume it is only the order
+  #of the first factor
+  if(length(factor_order)>0 & !is.list(factor_order)){
+    factor_order<-list(factor_order)
+  }
+  #if a factor is given but factor order is not given, just assume levels and 
+  #order already in data
+  if(length(factor_columns)>0 & length(factor_order)==0){
+    factor_order[[1]]<-unique(pull(tb,!!factor_symbols[[1]]))
+  }
+  
+
+
+  
   ab_sum_tb<-prepare_tb%>%
     filter(grepl("abun",tolower(datatype))) %>%
     {
       if (length(comparative_factor_column)>0) {
-        group_by(.,compound,comparative_factor_column,datatype)
+        group_by(.,compound,!!compar_factor_symbol,datatype)
       } else {
         group_by(.,compound,datatype)
       }
@@ -954,7 +999,7 @@ summarise_piedata<-function(prepare_tb,abund_string="abun",factor_column,
         group_by(.,compound,!!!factor_symbols,datatype)%>%
         summarise(average = mean(value))
     )%>%
-    mutate(across(!!tracer_symbol,~ ""))
+    mutate(across(any_of(tracer_column),~ ""))
   
   #make summary tibble of fractional contribution and isotopologue data,
   #then add abundance data
@@ -963,7 +1008,7 @@ summarise_piedata<-function(prepare_tb,abund_string="abun",factor_column,
              grepl("iso",tolower(datatype))) %>%
     {
       if (length(comparative_factor_column)>0) {
-        group_by(.,compound,comparative_factor_column,!!tracer_symbol,datatype)
+        group_by(.,compound,!!compar_factor_symbol,!!tracer_symbol,datatype)
       } else {
         group_by(.,compound,!!tracer_symbol,datatype)
       }

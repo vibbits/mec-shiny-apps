@@ -43,12 +43,8 @@
 
 #Todo nonUI
 
-#read in input data using a function that takes a path to either excel file
-#or folder, then assigns data based on namestrings in respectively excel sheets
-#or csv files. If possible to work with warning functions, output is the long 
-#tibble, otherwise is a list with the different tibbles
-
-#allow everything to function if optional variables set to NULL if not present
+#turn merging code into a single function, 
+#run code with same input either reading rds or creating first
 
 # test 2 factor with iso input: the sicrit comparison data!
 
@@ -89,41 +85,39 @@ source(here::here("Functions and modules/TraVis_Pies_functions merge isos and mu
 #example: rawpath<-r"(C:\User\Projects\Pie charts)"
 #can also specify relative to the project folder using the here::here command
 
-#set variables to NULL or none as required by functions that might not be present in data
-#and inputtype to NULL
-comparative_factor_column<-sampletype_column<-factor_column <- norm_column <- 
+#set optional variables to NULL, functions designed to handle absence
+isostring<-comparative_factor_column<-sampletype_column<-factor_column <- norm_column <- 
   tracer_column<-inputtype<-libfile<-lib_tb<-factor_levels_ordered<-NULL
-minfract_detected<-0
 
-#set variables to a default value that can be changed for specific projects
-#further in input
-isostring<-"parent"
+#set required variables to a default value that can be changed for specific 
+#projects further in input
 metastring<-"meta"
 abundstring<-"abund"
 labelstring<-"iso"
+minfract_detected<-0
 
-#test  excel with labeled data
-isostring<-"_C13-0"
-path<-here::here("Example_data/Input Excel")
-savepath<-path
-excelfile<-"example excel.xlsx"
-inputpath<-paste(path,excelfile,sep = "/")
-read_excel(inputpath,
-           which(grepl("meta",tolower(excel_sheets(inputpath)))))
-read_excel(inputpath,
-           which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
-  colnames()
-sample_column <-"Sample"
-factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
-factor_levels<-read_excel(inputpath,
-           which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
-  pull(factor_column)%>%
-  unique()
-factor_levels_ordered<-factor_levels[2:4]
-norm_column <- "Normalisation"   #"None" if not present
-sampletype_column<-"sample_type"
-libfile<-"Lib_excelexample.csv"
-lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
+# #test  excel with labeled data
+# isostring<-"_C13-0"
+# path<-here::here("Example_data/Input Excel")
+# savepath<-path
+# excelfile<-"example excel.xlsx"
+# inputpath<-paste(path,excelfile,sep = "/")
+# read_excel(inputpath,
+#            which(grepl("meta",tolower(excel_sheets(inputpath)))))
+# read_excel(inputpath,
+#            which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
+#   colnames()
+# sample_column <-"Sample"
+# factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
+# factor_levels<-read_excel(inputpath,
+#            which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
+#   pull(factor_column)%>%
+#   unique()
+# factor_levels_ordered<-factor_levels[2:4]
+# norm_column <- "Normalisation"   #"None" if not present
+# sampletype_column<-"sample_type"
+# libfile<-"Lib_excelexample.csv"
+# lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
 
 #test data 1-factor no replicates
 # rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Other examples for nonUI app\Bram problems 2)"
@@ -213,22 +207,21 @@ lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
 
 #test data 2-factor different tracers
 
-# rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
-# inputpath<-path<-gsub("\\\\", "/", rawpath)
-# inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor multitracer")
-# savepath<-path
-# metadatafile<-"2factor_multitrace_metadata.csv"
-# abundancefile<-"2factor_multitrace_RA.csv"
-# tracerfile<-"2factor_multitrace_FC.csv"
-# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-#                remove_empty = T)%>%colnames()
-# read_csv_clean(file=paste(path,tracerfile,sep = "/"),
-#                remove_empty = T)%>%colnames()
-# sample_column <-"Sample"
-# factor_column <- "Condition"   #"None" if not present
-# comparative_factor_column <- "Supplementation"   #"None" if not present, factor on each level of which the first factor is compared
-# norm_column <- "Normalisation"   #"None" if not present
-# tracer_column <-"Tracer"                #"None" if not present
+rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
+inputpath<-path<-gsub("\\\\", "/", rawpath)
+inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor multitracer")
+savepath<-path
+list.files(inputpath)
+metastring<-"2factor_multitrace_metadata.csv"
+abundstring<-"2factor_multitrace_RA.csv"
+labelstring<-"2factor_multitrace_FC.csv"
+loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
+sample_column <-"Sample"
+factor_column <- "Condition"   #"None" if not present
+comparative_factor_column <- "Supplementation"   #"None" if not present, factor on each level of which the first factor is compared
+norm_column <- "Normalisation"   #"None" if not present
+tracer_column <-"Tracer"                #"None" if not present
+
 
 #Miscellaneous
 P_isotopologues<-T                    #leave at false, only input fraction contribution data 
@@ -388,6 +381,7 @@ if("detected" %in% colnames(abund_worktb)){
   
   write_csv(abund_LODtb,paste0(path,"/LOD and compound detection table.csv"))
 }
+
 if(length(compounds_toomany_undetected)>0){
   print(paste0("Following compounds are below LOD in more than ",
                (1-minfract_detected)*100,"% of the samples."))
@@ -410,7 +404,7 @@ if("iso_tb"%in% names(input_list)) {
     select(-Isotopologue)%>%
     filter(compound %in% abund_longtb$compound,
            !!sample_symbol %in% pull(abund_longtb,sample_column))
-}
+} else iso_longtb<-NULL
 
 frac_longtb<-frac_worktb %>% 
   pivot_longer(2:ncol(.),names_to = "compound",values_to = "value")%>%
@@ -420,10 +414,16 @@ frac_longtb<-frac_worktb %>%
 
 
 #transform metatb for joining to long tibble
+input_list$meta_tb%>%
+  select(-any_of(c(sampletype_column,norm_column)))
+
+
 meta_tb<-input_list$meta_tb%>%
   {
-    if(sampletype_column %in% colnames(.)) {
-      filter(.,!!sampletype_symbol != "blank")
+    if(length(sampletype_column)>0){
+      if(sampletype_column %in% colnames(.)) {
+        filter(.,!!sampletype_symbol != "blank")
+      } else .
     } else .
   }%>%
   select(-any_of(c(sampletype_column,norm_column)))
@@ -431,10 +431,8 @@ meta_tb<-input_list$meta_tb%>%
 #join all data, keeping meta for last, then  drop unused factor
 # levels and reorder them like input if specified(like those of blanks!)
 #todo turn joinin series into function
-tb<-full_join(abund_longtb,frac_longtb)%>%
-  full_join(iso_longtb)%>%
-  left_join(meta_tb)%>%
-  select(!!sample_symbol,any_of(colnames(meta_tb)),everything())%>%
+tb<-join_metabo_longdata(abund_longtb,frac_longtb,iso_longtb,meta_tb,
+                         sample_column = sample_column)%>%
   clean_order_factors(factor_columns,factor_levels_ordered)
 
 # Code pies ---------------------------------------------
@@ -476,10 +474,12 @@ if(length(tracer_column)>0){
 
 #prepare summarized table with means and p values of differences
 #of selected factor levels with desired factor order
-# undebug(prepare_piedata)
-# undebug(summarise_piedata)
+undebug(prepare_piedata)
 # undebug(kruskal.test)
-# undebug(kruskal_piedata)
+undebug(kruskal_piedata)
+undebug(clean_order_factors)
+debug(summarise_piedata)
+
 sum_tb<-tb %>%
   # filter(compound=="(2 and/or 3-)Phosphoglyceric acid")%>%
 
@@ -487,14 +487,15 @@ sum_tb<-tb %>%
   #Extract data only for desired factor levels and set factor order
   prepare_piedata(factor_columns = factor_columns,
                   tracer_column = tracer_column,
-                  factor_order = factor_order)%>%
+                  factor_order = factor_levels_ordered)%>%
   
   #summarize data per combination of compounds, factors, tracer types and data types
   #for each comparison factor level, test differences of first factor using P value
   #if only one factor simply test differences of first factor once.
   summarise_piedata(prepare_tb,factor_column = factor_column,
                     comparative_factor_column = comparative_factor_column,
-                    tracer_column = tracer_column,factor_order = factor_order)
+                    tracer_column = tracer_column,factor_order = 
+                      factor_levels_ordered)
 
 #obtain isotopologue slice tb for plotting if isotopologues provided
 isos_calculated<-F
@@ -543,8 +544,7 @@ FCslice_tb<- sum_tb%>%
 selected_compound<-unique(FCslice_tb$compound)[1]
 
 # debug(make_piechart)
-make_piechart(FCslice_tb %>%
-                filter(as.numeric(gsub("*","",cohort,fixed=T))<2),
+make_piechart(FCslice_tb,
               factor_columns = factor_columns,
               tracer_column = tracer_column,
               log_abund=log_abund,
