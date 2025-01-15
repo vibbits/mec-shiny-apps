@@ -8,7 +8,7 @@
 # charts. Called in modules of TraVis pies, but not inherently linked to R shiny
 # functionality and could be used and useful outside shiny framework.
 
-# Functions and libraries ---------------------------------------------------------------
+#Libraries ---------------------------------------------------------------
 #libraries for UI
 library(dplyr)        #for faster.easier manipulation of data
 library(tibble)       #for manipulating tibbles
@@ -74,6 +74,9 @@ check_install_fonts<-function(import_dir=NULL) {
   loadfonts()
   
 }
+
+
+# Functions for data curation and merging ---------------------------------------------
 
 # function for checking if any column cell is different from 0
 has_nonzero <- function(x) { any(x != 0)}         
@@ -866,6 +869,151 @@ join_metabo_longdata<-function(abund_longtb,frac_longtb,iso_longtb=NULL,meta_tb,
     select(!!sample_symbol,any_of(colnames(meta_tb)),everything())
 }
 
+#Function that takes input specifying polly/dolly output data location and type, 
+#and which metadata variables have to be taken along 
+dolly_to_longtibble<-function(path,inputpath,metastring="meta",
+                              abundstring="abund",
+                              labelstring="iso",
+                              isostring="iso",
+                              minfract_detected=0,
+                              sample_column,factor_column=NULL,
+                              comparative_factor_column=NULL,
+                              factor_levels_ordered=NULL,
+                              tracer_column=NULL,
+                              norm_column=NULL,
+                              sampletype_column=NULL,
+                              lib_tb=NULL){
+  
+  #make symbols for dplyr pipelines
+  factor_columns <- c(factor_column,comparative_factor_column)
+  factor_symbols<-sym_or_null(factor_columns,returnlist = T)
+  factor_symbol<-factor_symbols[[1]]
+  if(length(factor_symbols)==2) compar_factor_symbol<-factor_symbols[[2]] else {
+    compar_factor_symbol<-NULL
+  }
+  sample_symbol<-sym_or_null(sample_column,allownull = F)
+  tracer_symbol<-sym_or_null(tracer_column)
+  norm_symbol<-sym_or_null(norm_column)
+  sampletype_symbol<-sym_or_null(sampletype_column)
+  
+  input_list<-
+    list_inputdata_tbs(inputpath,metastring = metastring,
+                       abundstring = abundstring,labelstring = labelstring,
+                       isostring = isostring,sample_column = sample_column,
+                       factor_columns = factor_columns,
+                       norm_column = norm_column,
+                       tracer_column = tracer_column,
+                       sampletype_column = sampletype_column,lib_tb = lib_tb)
+  
+  #if no fractional contribution data present, 
+  #calculate from isotopologue data
+  if(!"frac_tb"%in% names(input_list)) {
+    #calculate fractional contribution
+    frac_worktb<-extract_col_isotopologues(input_list$iso_tb,
+                                           iso_suffix_sep = "_")%>%
+      select(-datatype)%>%
+      calculate_FC()
+    
+  } else frac_worktb<-input_list$frac_tb
+  
+  #do checks on input data
+  #generate error or warning messages if any
+  check_output<-check_samples_compounds(
+    meta_tb = input_list$meta_tb,
+    abund_tb = input_list$abund_tb,
+    frac_tb = frac_worktb,
+    sample_column = sample_column,
+    norm_column = norm_column)
+  
+  if (check_output$error) {
+    validate(check_output$message)
+  } else {
+    outputtext<-check_output$message
+  }
+  
+  #curate abundance data, save LOD data if present and note which compounds
+  #are detected in less samples than required
+  #detected too little
+  abund_worktb<-input_list$abund_tb%>%
+    curate_abundancedata(meta_tb=input_list$meta_tb,sample_column = sample_column,
+                         norm_column = norm_column,
+                         sampletype_column = sampletype_column)%>%
+    select(-any_of(c(sampletype_column,norm_column)))
+  
+  compounds_toomany_undetected<-character(0)
+  if("detected" %in% colnames(abund_worktb)){
+    abund_LODtb<-abund_worktb%>%
+      select(!!sample_symbol,compound,detected,any_of(c("LOD","LOD_blankcor")))%>%
+      group_by(compound) %>%
+      summarise(detected_fraction=length(which(detected))/n())%>%
+      left_join(
+        abund_worktb%>%
+          select(compound,any_of(c("LOD","LOD_blankcor")))%>%
+          unique(),
+        by="compound")
+    
+    compounds_toomany_undetected<-abund_LODtb%>%
+      filter(detected_fraction<minfract_detected)%>%
+      pull(compound)
+    
+    write_csv(abund_LODtb,paste0(path,"/LOD and compound detection table.csv"))
+  }
+  
+  if(length(compounds_toomany_undetected)>0){
+    print(paste0("Following compounds are below LOD in more than ",
+                 (1-minfract_detected)*100,"% of the samples."))
+  }
+  #transform abundance data to long format, saving all found types of abundance
+  #with the common name
+  abund_longtb<-abund_worktb%>%
+    filter(!compound %in% compounds_toomany_undetected)%>%
+    select(!!sample_symbol,
+           compound,any_of(c("Abund","BlankcorAbund","NormAbund")))%>%
+    pivot_longer(any_of(c("Abund","BlankcorAbund","NormAbund")),
+                 names_to = "datatype",values_to = "value")
+  
+  #transform isotopologue and fraccon data to long format, saving all found types
+  #of abundance with the common name, and dropping any samples or compounds not
+  #in abund_longtb
+  if("iso_tb"%in% names(input_list)) {
+    iso_longtb<-extract_col_isotopologues(input_list$iso_tb,
+                                          iso_suffix_sep = "_")%>%
+      select(-Isotopologue)%>%
+      filter(compound %in% abund_longtb$compound,
+             !!sample_symbol %in% pull(abund_longtb,sample_column))
+  } else iso_longtb<-NULL
+  
+  frac_longtb<-frac_worktb %>% 
+    pivot_longer(2:ncol(.),names_to = "compound",values_to = "value")%>%
+    mutate(datatype="FracCont",.before = 3)%>%
+    filter(compound %in% abund_longtb$compound,
+           !!sample_symbol %in% pull(abund_longtb,sample_column))
+  
+  
+  #transform metatb for joining to long tibble
+  input_list$meta_tb%>%
+    select(-any_of(c(sampletype_column,norm_column)))
+  
+  
+  meta_tb<-input_list$meta_tb%>%
+    {
+      if(length(sampletype_column)>0){
+        if(sampletype_column %in% colnames(.)) {
+          filter(.,!!sampletype_symbol != "blank")
+        } else .
+      } else .
+    }%>%
+    select(-any_of(c(sampletype_column,norm_column)))
+  
+  #join all data, keeping meta for last, then  drop unused factor
+  # levels and reorder them like input if specified(like those of blanks!)
+  #todo turn joinin series into function
+  tb<-join_metabo_longdata(abund_longtb,frac_longtb,iso_longtb,meta_tb,
+                           sample_column = sample_column)%>%
+    clean_order_factors(factor_columns,factor_levels_ordered)
+}
+# Functions for generating pie charts -------------------------------------
+
 
 #Select only desired columns and filter only supported datatypes.
 #Extract data only for desired factor levels and set factor order
@@ -932,7 +1080,7 @@ kruskal_piedata<-function(data,test_formula,factor_column,factor_order){
   for(i in 2:length(factor_order[[1]])){
     tgt_cohort<-factor_order[[1]][i]
     partdata<-data %>% filter(!!factor_symbol %in% c(ref_cohort,tgt_cohort))
-    if(length(unique(partdata[,factor_column]))<2) next
+    if(length(unique(pull(partdata,factor_column)))<2) next
     kwtest_results<-kwtest_results %>%
       mutate(p.value=if_else(!!factor_symbol==tgt_cohort,
                              kruskal.test(formula=test_formula,data=partdata)$p.value,
@@ -1306,13 +1454,20 @@ make_piechart<-function(slice_tb,selected_compound,tracer_column=tracer_column,
   }
   tracer_symbol<-sym_or_null(tracer_column)
   
+  #turn tracer column into factor, save original levels in order of appearance
   #extract data of selected compound only, keep only fractions above 0
-  #turn tracer column into factor
-  slice_tb <- slice_tb %>%
+  #keep only tracer colors linked to existing levels
+  slice_mod_tb <- slice_tb %>%
+    mutate(!!tracer_symbol:=factor(!!tracer_symbol,
+                                   levels=unique(!!tracer_symbol))
+           )
+  orig_levels<-levels(slice_mod_tb$Tracer)
+    
+  slice_mod_tb <- slice_mod_tb %>%
     filter(compound==selected_compound,
-           Fraction>0)%>%
-    mutate(!!tracer_symbol:=factor(!!tracer_symbol))
-  
+           Fraction>0)
+  col_labeling<-col_labeling[which(orig_levels %in% 
+                                     as.character(unique(slice_mod_tb$Tracer)))]
   #create starting barplot. X= halved abundances required, take log if requested
   #Adds gridlines that will become reference circles at 0.25 0.5 0.75 and 1 on 
   #normal scale or 0.001 0.01 0.1 and 1 on log scale. 
@@ -1325,7 +1480,7 @@ make_piechart<-function(slice_tb,selected_compound,tracer_column=tracer_column,
     #scale corresponding to average of log scale minimal limit 
     #and logscale abundance, and abundance width to the difference of the log 
     #scale abundance and log scale minimal limit
-    slice_tb <- slice_tb %>% 
+    slice_mod_tb <- slice_mod_tb %>% 
       rowwise() %>%
       mutate(modAbund=10^((log10(Abund)+log10(minvalue))/2),
              modAbund_width=-(log10(minvalue)-log10(Abund)),
@@ -1335,7 +1490,7 @@ make_piechart<-function(slice_tb,selected_compound,tracer_column=tracer_column,
                                    log10(modAbund),
                                    log10(minvalue)))
     
-    plotrect<-slice_tb %>% ggplot(aes(x = modAbund, y = Fraction,  
+    plotrect<-slice_mod_tb %>% ggplot(aes(x = modAbund, y = Fraction,  
                                       fill = !!tracer_symbol, 
                                       width = modAbund_width)) + 
       scale_x_log10(limits= c(minvalue, 1)) +
@@ -1350,7 +1505,7 @@ make_piechart<-function(slice_tb,selected_compound,tracer_column=tracer_column,
       geom_bar(stat = "identity", position = "fill",alpha=alpha) 
     
   } else {
-    plotrect<-slice_tb %>% ggplot(aes(x = Abund/2, y = Fraction,
+    plotrect<-slice_mod_tb %>% ggplot(aes(x = Abund/2, y = Fraction,
                                       fill = !!tracer_symbol,  
                                       width = Abund)) + 
       geom_vline(xintercept=c(0.25),colour=circlelinecolor,
@@ -1381,41 +1536,41 @@ make_piechart<-function(slice_tb,selected_compound,tracer_column=tracer_column,
   # to avoid labels overlapping. Fontsize needs to be adjusted for reasons:
   #https://stackoverflow.com/questions/25061822/ggplot-geom-text-font-size-control
   # plotrect<-plotrect  +
-  #   geom_text(aes(label=labFC),x = slice_tb$FClab_posDist,
-  #             y=slice_tb$FClab_posAngle,size=otherfontsize*5/14)
+  #   geom_text(aes(label=labFC),x = slice_mod_tb$FClab_posDist,
+  #             y=slice_mod_tb$FClab_posAngle,size=otherfontsize*5/14)
   if (show_P) {
     plotrect<-plotrect  +
       geom_text(aes(label=P_RAlab),x=1.6,y=7/8,size=otherfontsize*5/14,
                 hjust="inward",vjust="inward")
     
-    if (length(unique(pull(slice_tb[,tracer_column])))>2) {
+    if (length(unique(pull(slice_mod_tb[,tracer_column])))>2) {
       plotrect<-plotrect  +
-        geom_text_repel(data=slice_tb,
-                        aes(label=paste0(labFC,P_FClab)),
-                        x = slice_tb$FClab_posDist,y=slice_tb$FClab_posAngle,
+        geom_text_repel(data=slice_mod_tb,
+                        aes(label=paste0(labFC,"\n",P_FClab)),
+                        x = slice_mod_tb$FClab_posDist,y=slice_mod_tb$FClab_posAngle,
                         size=otherfontsize*5/14, family=font,
-                        point.size=NA,direction = "x",
+                        point.size=NA,direction = "both",
                         arrow = arrow())
     } else {
       plotrect<-plotrect  +
-        geom_text(aes(label=labFC),x = slice_tb$FClab_posDist,
-                  y=slice_tb$FClab_posAngle,size=otherfontsize*5/14, family=font)+  
+        geom_text(aes(label=labFC),x = slice_mod_tb$FClab_posDist,
+                  y=slice_mod_tb$FClab_posAngle,size=otherfontsize*5/14, family=font)+  
         geom_text(aes(label=P_FClab),x=1.6,y=5/8,size=otherfontsize*5/14,
                   hjust="inward",vjust="inward",family=font)      
     }
   } else {
-    if (length(unique(pull(slice_tb[,tracer_column])))>2) {
+    if (length(unique(pull(slice_mod_tb[,tracer_column])))>2) {
       plotrect<-plotrect  +
-        geom_text_repel(data=slice_tb,
+        geom_text_repel(data=slice_mod_tb,
                         aes(label=paste0(labFC)),
-                        x = slice_tb$FClab_posDist,y=slice_tb$FClab_posAngle,
+                        x = slice_mod_tb$FClab_posDist,y=slice_mod_tb$FClab_posAngle,
                         size=otherfontsize*5/14, family=font,
                         point.size=NA,direction = "x",
                         arrow = arrow())
     } else {
       plotrect<-plotrect  +
-        geom_text(aes(label=labFC),x = slice_tb$FClab_posDist,
-                  y=slice_tb$FClab_posAngle,size=otherfontsize*5/14, family=font)+  
+        geom_text(aes(label=labFC),x = slice_mod_tb$FClab_posDist,
+                  y=slice_mod_tb$FClab_posAngle,size=otherfontsize*5/14, family=font)+  
         geom_text(aes(label=P_FClab),x=1.6,y=5/8,size=otherfontsize*5/14,
                   hjust="inward",vjust="inward",family=font)      
     }

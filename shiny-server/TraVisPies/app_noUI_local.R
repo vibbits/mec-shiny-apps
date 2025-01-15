@@ -101,27 +101,27 @@ labelstring<-"iso"
 minfract_detected<-0
 
 # #test  excel with labeled data
-isostring<-"_C13-0"
-path<-here::here("Example_data/Input Excel")
-savepath<-path
-excelfile<-"example excel.xlsx"
-inputpath<-paste(path,excelfile,sep = "/")
-read_excel(inputpath,
-           which(grepl("meta",tolower(excel_sheets(inputpath)))))
-read_excel(inputpath,
-           which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
-  colnames()
-sample_column <-"Sample"
-factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
-factor_levels<-read_excel(inputpath,
-           which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
-  pull(factor_column)%>%
-  unique()
-factor_levels_ordered<-factor_levels[2:4]
-norm_column <- "Normalisation"   #"None" if not present
-sampletype_column<-"sample_type"
-libfile<-"Lib_excelexample.csv"
-lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
+# isostring<-"_C13-0"
+# path<-here::here("Example_data/Input Excel")
+# savepath<-path
+# excelfile<-"example excel.xlsx"
+# inputpath<-paste(path,excelfile,sep = "/")
+# read_excel(inputpath,
+#            which(grepl("meta",tolower(excel_sheets(inputpath)))))
+# read_excel(inputpath,
+#            which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
+#   colnames()
+# sample_column <-"Sample"
+# factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
+# factor_levels<-read_excel(inputpath,
+#            which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
+#   pull(factor_column)%>%
+#   unique()
+# factor_levels_ordered<-factor_levels[2:4]
+# norm_column <- "Normalisation"   #"None" if not present
+# sampletype_column<-"sample_type"
+# libfile<-"Lib_excelexample.csv"
+# lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
 
 #test data 1-factor no replicates
 # rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Other examples for nonUI app\Bram problems 2)"
@@ -211,20 +211,20 @@ lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
 
 #test data 2-factor different tracers
 
-# rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
-# inputpath<-path<-gsub("\\\\", "/", rawpath)
-# inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor multitracer")
-# savepath<-path
-# list.files(inputpath)
-# metastring<-"2factor_multitrace_metadata.csv"
-# abundstring<-"2factor_multitrace_RA.csv"
-# labelstring<-"2factor_multitrace_FC.csv"
-# loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
-# sample_column <-"Sample"
-# factor_column <- "Condition"   #"None" if not present
-# comparative_factor_column <- "Supplementation"   #"None" if not present, factor on each level of which the first factor is compared
-# norm_column <- "Normalisation"   #"None" if not present
-# tracer_column <-"Tracer"                #"None" if not present
+rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
+inputpath<-path<-gsub("\\\\", "/", rawpath)
+inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor multitracer")
+savepath<-path
+list.files(inputpath)
+metastring<-"2factor_multitrace_metadata.csv"
+abundstring<-"2factor_multitrace_RA.csv"
+labelstring<-"2factor_multitrace_FC.csv"
+loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
+sample_column <-"Sample"
+factor_column <- "Condition"   #"None" if not present
+comparative_factor_column <- "Supplementation"   #"None" if not present, factor on each level of which the first factor is compared
+norm_column <- "Normalisation"   #"None" if not present
+tracer_column <-"Tracer"                #"None" if not present
 
 
 #Miscellaneous
@@ -241,7 +241,7 @@ show_P<-T                              #show P values on pie plots
 #figure appearance parameters
 #any color input recognized by ggplot2::scale_fill_manual can be used
 col_labeling<-c("#ffd966","#bfbfbf")   #colors for labeled and unlabeled fraction 
-# col_labeling<-c("#bfbfbf","#ffd966","lightblue")   #colors for 2 tracers and unlabeled fraction
+col_labeling<-c("lightblue","#ffd966","#bfbfbf")   #colors for 2 tracers and unlabeled fraction
 maxcol_facet<-3                       #maximum amount of images horizontal
 include_name<-T                        #include compound name on figure
 include_legend<-T                      #include legend on figure
@@ -275,7 +275,7 @@ height<-16
 # for 3 cohorts 18 16 16 recommended
 cohortsize<-18                        #text size of cohort names
 legendtitlesize<-16                   #set legend font size
-otherfontsize<-16                     #adapt text size of all but those above
+otherfontsize<-12                     #adapt text size of all but those above
 
 
 #fontsizes on summary pie charts for pathway
@@ -311,6 +311,18 @@ format<-"png"
 
 
 # Code merging data-------------------------------------------------------------------
+#todo troubleshoot joining code
+# tb<-dolly_to_longtibble(path,inputpath,metastring = metastring,
+#                         abundstring = abundstring,labelstring = labelstring,
+#                         isostring = isostring,
+#                         sample_column = sample_column,
+#                         factor_column = factor_column,
+#                         comparative_factor_column = 
+#                           comparative_factor_column,
+#                         norm_column = norm_column,
+#                         tracer_column = tracer_column,
+#                         sampletype_column = sampletype_column,lib_tb = lib_tb)
+
 #make symbols for dplyr pipelines
 factor_columns <- c(factor_column,comparative_factor_column)
 factor_symbols<-sym_or_null(factor_columns,returnlist = T)
@@ -493,14 +505,14 @@ if(length(tracer_column)>0){
 #of selected factor levels with desired factor order
 # undebug(prepare_piedata)
 # undebug(kruskal.test)
-debug(kruskal_piedata)
+# undebug(kruskal_piedata)
 # undebug(clean_order_factors)
 # undebug(summarise_piedata)
 
 #todo for some reason fraccon and isotopologue data kruskal wallis is 
 #not working because all cohorts are the same??
 sum_tb<-tb %>%
-  filter(compound=="(2 and/or 3-)Phosphoglyceric acid")%>%
+  # filter(compound=="(2 and/or 3-)Phosphoglyceric acid")%>%
 
   #Select only desired columns and filter only supported datatypes.
   #Extract data only for desired factor levels and set factor order
@@ -561,34 +573,53 @@ FCslice_tb<- sum_tb%>%
     }
   }
 
-selected_compound<-unique(FCslice_tb$compound)[1]
+selected_compound<-unique(FCslice_tb$compound)[11]
 
-# debug(make_piechart)
+debug(make_piechart)
 make_piechart(FCslice_tb,
-              factor_columns = factor_columns,
-              tracer_column = tracer_column,
-              log_abund=log_abund,
-              circlelinecolor = circlelinecolor,selected_compound=selected_compound,
-              circlelinetypes = circlelinetypes,
-              maxcol_facet = maxcol_facet,
-              include_name = include_name,col_labeling = col_labeling,
-              alpha=alpha,font=font,otherfontsize = otherfontsize,
-              legendtitlesize =legendtitlesize,
-              cohortsize = cohortsize,include_legend = include_legend,
-              show_P=show_P)
+                    factor_columns = factor_columns,
+                    tracer_column = tracer_column,
+                    log_abund=log_abund,
+                    circlelinecolor = circlelinecolor,selected_compound=
+                      unique(FCslice_tb$compound)[14],
+                    circlelinetypes = circlelinetypes,
+                    maxcol_facet = maxcol_facet,
+                    include_name = include_name,col_labeling = col_labeling,
+                    alpha=alpha,font=font,otherfontsize = otherfontsize,
+                    legendtitlesize =legendtitlesize,
+                    cohortsize = cohortsize,include_legend = include_legend,
+                    show_P=show_P)
+
+for(i in unique(FCslice_tb$compound)) {
+  pies<-make_piechart(FCslice_tb,
+                factor_columns = factor_columns,
+                tracer_column = tracer_column,
+                log_abund=log_abund,
+                circlelinecolor = circlelinecolor,selected_compound=i,
+                circlelinetypes = circlelinetypes,
+                maxcol_facet = maxcol_facet,
+                include_name = include_name,col_labeling = col_labeling,
+                alpha=alpha,font=font,otherfontsize = otherfontsize,
+                legendtitlesize =legendtitlesize,
+                cohortsize = cohortsize,include_legend = include_legend,
+                show_P=show_P)
+  
+  plot(pies)
+}
+
 
 #todo make it work for isotopologue pies
-make_piechart(isoslice_tb,factor_columns = factor_columns,
-              tracer_column = "Isotopologue",
-              log_abund=log_abund,
-              circlelinecolor = circlelinecolor,selected_compound=selected_compound,
-              circlelinetypes = circlelinetypes,
-              maxcol_facet = maxcol_facet,
-              include_name = include_name,col_labeling = NULL,
-              alpha=alpha,font=font,otherfontsize = otherfontsize,
-              legendtitlesize =legendtitlesize,
-              cohortsize = cohortsize,include_legend = include_legend,
-              show_P=show_P)
+# make_piechart(isoslice_tb,factor_columns = factor_columns,
+#               tracer_column = "Isotopologue",
+#               log_abund=log_abund,
+#               circlelinecolor = circlelinecolor,selected_compound=selected_compound,
+#               circlelinetypes = circlelinetypes,
+#               maxcol_facet = maxcol_facet,
+#               include_name = include_name,col_labeling = NULL,
+#               alpha=alpha,font=font,otherfontsize = otherfontsize,
+#               legendtitlesize =legendtitlesize,
+#               cohortsize = cohortsize,include_legend = include_legend,
+#               show_P=show_P)
 
 
 
