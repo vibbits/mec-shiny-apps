@@ -42,19 +42,16 @@
 #results.
 
 #Todo nonUI
-
 #choose normalize or not when summarizing
-#make function to correct FC for negative values, reduce all positive values
-#proportional to their contribution to the total positive value to the total
-#of the amount of negative values
-#turn merging code into a single function, 
+
+#turn merging code into a single function
+#use for sicrit
 #run code with same input either reading rds or creating first
 
-# test 2 factor with iso input: the sicrit comparison data!
+# todo make it work for isotopologue pies, if FC pies fine adapt function isoslice
+#to match FC slice
 
-#something is wrong with ggrepel, used to work? Try older version. 
-
-# todo make it work for isotopologue pies
+#make it work for 1cohort or 1replicate studies
 
 
 #Todo UI
@@ -79,8 +76,8 @@ library(broom)        #for using regression models in dplyr pipes
 library(ggplot2)      #for generating the pie chart plots
 
 #load functions to support the app 
-# source(here::here("Functions and modules/TraVis_Pies_functions.R"))
-source(here::here("Functions and modules/TraVis_Pies_functions merge isos and multifactor multitracer.R"))
+source(here::here("Functions and modules/metabolomics_tibble_functions.R"))
+source(here::here("Functions and modules/TraVis_Pies_functions.R"))
 
 # User input -------------------------------------------------------------------
 #Data file locations and specifications
@@ -91,7 +88,7 @@ source(here::here("Functions and modules/TraVis_Pies_functions merge isos and mu
 
 #set optional variables to NULL, functions designed to handle absence
 isostring<-comparative_factor_column<-sampletype_column<-factor_column <- norm_column <- 
-  tracer_column<-inputtype<-libfile<-lib_tb<-factor_levels_ordered<-NULL
+  tracer_column<-inputtype<-libfile<-lib_tb<-factor_levels_ordered<-col_labeling<-NULL
 
 #set required variables to a default value that can be changed for specific 
 #projects further in input
@@ -101,45 +98,46 @@ labelstring<-"iso"
 minfract_detected<-0
 
 # #test  excel with labeled data
-# isostring<-"_C13-0"
-# path<-here::here("Example_data/Input Excel")
-# savepath<-path
-# excelfile<-"example excel.xlsx"
-# inputpath<-paste(path,excelfile,sep = "/")
-# read_excel(inputpath,
-#            which(grepl("meta",tolower(excel_sheets(inputpath)))))
-# read_excel(inputpath,
-#            which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
-#   colnames()
-# sample_column <-"Sample"
-# factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
-# factor_levels<-read_excel(inputpath,
-#            which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
-#   pull(factor_column)%>%
-#   unique()
-# factor_levels_ordered<-factor_levels[2:4]
-# norm_column <- "Normalisation"   #"None" if not present
-# sampletype_column<-"sample_type"
-# libfile<-"Lib_excelexample.csv"
-# lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
+isostring<-"_C13-0"
+path<-here::here("Example_data/Experimental examples for nonUI app/Excel_1factor_1tracer")
+savepath<-path
+excelfile<-"example excel.xlsx"
+inputpath<-paste(path,excelfile,sep = "/")
+read_excel(inputpath,
+           which(grepl("meta",tolower(excel_sheets(inputpath)))))
+read_excel(inputpath,
+           which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
+  colnames()
+sample_column <-"Sample"
+factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
+factor_levels<-read_excel(inputpath,
+           which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
+  pull(factor_column)%>%
+  unique()
+factor_levels_ordered<-factor_levels[2:4]
+norm_column <- "Normalisation"   #"None" if not present
+sampletype_column<-"sample_type"
+libfile<-"Lib_excelexample.csv"
+lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
 
-#test data 1-factor no replicates
-# rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Other examples for nonUI app\Bram problems 2)"
+#todo test data 1-factor no replicates
+# rawpath<-r"(D:\Documents\GitHub\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Input noreplicate one cohort)"
 # inputpath<-path<-gsub("\\\\", "/", rawpath)
-# # inputpath<-path<-here::here("Example_data/Original input")
+# inputpath<-path<-here::here("Example_data/Input noreplicate one cohort")
 # savepath<-path
-# metadatafile<-"MD.csv"
-# abundancefile<-"RA.csv"
-# tracerfile<-"FC.csv"
-# mapcoordsfile<-"Pathway figure coords.csv"
-# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-#                remove_empty = T)%>%colnames()
-# sample_column <-"Samples"
-# factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
- 
+# list.files(inputpath)
+# metastring<-"metadata."
+# abundstring<-"_RA."
+# labelstring<-"_iso"
+# isostring<-"_C13-label"
+# loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
+# testload<-loadfile_stringmatch(inputpath,abundstring)
+# testload<-loadfile_stringmatch(inputpath,labelstring)
+# sample_column <-"Sample"
+# factor_column <- "Cohort"   #"None" if not present, or 1 or two element vector
 
-#test data 1-factor
- 
+
+#todo test data 1-factor FC or iso input
 # rawpath<-r"(C:\Users\u0134881\Documents\R\Create figures\Pie charts\Pie charts inputfiles\Pie charts 1factor)"
 # inputpath<-path<-gsub("\\\\", "/", rawpath)
 # inputpath<-path<-here::here("Example_data/Original input")
@@ -149,7 +147,8 @@ minfract_detected<-0
 # metastring<-"metadata."
 # abundstring<-"_RA."
 # labelstring<-"_FC"
-# labelstring<-"_iso"
+# # labelstring<-"_iso"
+# isostring<-"C13-label"
 # loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
 # testload<-loadfile_stringmatch(inputpath,abundstring)
 # testload<-loadfile_stringmatch(inputpath,labelstring)
@@ -157,91 +156,107 @@ minfract_detected<-0
 # factor_column <- "Cohort"   #"None" if not present, or 1 or two element vector
 # norm_column<-"Normalisation"
 
-
-#test data 1-factor iso input
-
-# rawpath<-r"(F:\Documents\Code\Github\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Crashes)"
-# inputpath<-path<-gsub("\\\\", "/", rawpath)
-# inputpath<-path<-here::here("Example_data/Original input")
-# savepath<-path
-# metadatafile<-"Input_Example_metadata.csv"
-# abundancefile<-"Input_Example_RA.csv"
-# tracerfile<-"Input_Example_isotopologues.csv"
-# sample_column <-"Sample"
-# factor_column <- "Cohort"   #"None" if not present
-
-
 #test data 2-factor
-
 # rawpath<-r"(D:\Documents\GitHub\mec-shiny-apps\shiny-server\TraVisPies\Example_data\Experimental examples for nonUI app\Pie charts 2factor)"
 # inputpath<-path<-gsub("\\\\", "/", rawpath)
 # inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor")
 # savepath<-path
-# metadatafile<-"2factorpies_metadata.csv"
-# abundancefile<-"2factorpies_RA.csv"
-# tracerfile<-"2factorpies_FC.csv"
-# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-#                remove_empty = T)%>%colnames()
+# list.files(inputpath)
+# metastring<-"metadata."
+# abundstring<-"_RA."
+# labelstring<-"_FC"
+# loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
+# testload<-loadfile_stringmatch(inputpath,abundstring)
+# testload<-loadfile_stringmatch(inputpath,labelstring)
 # sample_column <-"Sample"
 # factor_column <- "Time"   #"None" if not present
 # comparative_factor_column <- "Condition"   #"None" if not present, factor on each level of which the first factor is compared
 # norm_column <- "Normalisation"   #"None" if not present
 
 
-
 #test data 1-factor different tracers
-
 # rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 1 factor multitracer)"
 # inputpath<-path<-gsub("\\\\", "/", rawpath)
 # inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 1 factor multitracer")
 # savepath<-path
-# metadatafile<-"MCF001748,74_multitrace_metadata.csv"
-# abundancefile<-"MCF001748,74_multitrace_RA.csv"
-# tracerfile<-"MCF001748,74_multitrace_FC.csv"
-# read_csv_clean(file=paste(path,metadatafile,sep = "/"),
-#                remove_empty = T)%>%colnames()
-# read_csv_clean(file=paste(path,tracerfile<-"MCF001748,74_multitrace_FC.csv"
-# ,sep = "/"),
-#                remove_empty = T)%>%colnames()
+# list.files(inputpath)
+# metastring<-"metadata."
+# abundstring<-"_RA."
+# labelstring<-"_FC"
+# loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
+# testload<-loadfile_stringmatch(inputpath,abundstring)
+# testload<-loadfile_stringmatch(inputpath,labelstring)
 # sample_column <-"Sample"
 # factor_column <- "Condition"   #"None" if not present
-# comparative_factor_column <- NULL   #NULL if not present, factor on each level of which the first factor is compared
 # norm_column <- "Normalisation"   #"None" if not present
 # tracer_column <-"Tracer"                #"None" if not present
 
 #test data 2-factor different tracers
+# rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
+# inputpath<-path<-gsub("\\\\", "/", rawpath)
+# inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor multitracer")
+# savepath<-path
+# list.files(inputpath)
+# metastring<-"2factor_multitrace_metadata.csv"
+# abundstring<-"2factor_multitrace_RA.csv"
+# labelstring<-"2factor_multitrace_FC.csv"
+# loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
+# sample_column <-"Sample"
+# factor_column <- "Condition"   #"None" if not present
+# comparative_factor_column <- "Supplementation"   #"None" if not present, factor on each level of which the first factor is compared
+# norm_column <- "Normalisation"   #"None" if not present
+# tracer_column <-"Tracer"                #"None" if not present
 
-rawpath<-r"(F:\Documents\Code\R\Create figures\TraVis Pies\Pie charts inputfiles\Pie charts 2factor multitracer)"
-inputpath<-path<-gsub("\\\\", "/", rawpath)
-inputpath<-path<-here::here("Example_data/Experimental examples for nonUI app/Pie charts 2factor multitracer")
-savepath<-path
-list.files(inputpath)
-metastring<-"2factor_multitrace_metadata.csv"
-abundstring<-"2factor_multitrace_RA.csv"
-labelstring<-"2factor_multitrace_FC.csv"
-loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
-sample_column <-"Sample"
-factor_column <- "Condition"   #"None" if not present
-comparative_factor_column <- "Supplementation"   #"None" if not present, factor on each level of which the first factor is compared
-norm_column <- "Normalisation"   #"None" if not present
-tracer_column <-"Tracer"                #"None" if not present
+
+#other data 2-factor different tracers
+# rawpath<-r"(D:\Documents\Articles\Own\Sugar separation PGM1\Manuscript\Figures pies)"
+# inputpath<-path<-gsub("\\\\", "/", rawpath)
+# savepath<-path
+# list.files(inputpath)
+# metastring<-"PGM1gal_multitrace_metadata_SDC.csv"
+# abundstring<-"_RA.csv"
+# labelstring<-"_FC.csv"
+# loadfile_stringmatch(inputpath,metastring)%>%colnames(.)
+# sample_column <-"Sample"
+# factor_column <- "Condition"   #"None" if not present
+# comparative_factor_column <- "Supplementation"   #"None" if not present, factor on each level of which the first factor is compared
+# norm_column <- "Normalisation"   #"None" if not present
+# tracer_column <-"Tracer"                #"None" if not present
+# col_labeling<-c("#63B2F3","#FFE699","#bfbfbf")   #colors for 2 tracers and unlabeled fraction
+
+#excel multitracer multifactor
+# isostring<-"_C13-0"
+# path<-here::here("Example_data/Experimental examples for nonUI app/Excel_2factor_2tracer")
+# savepath<-path
+# excelfile<-"TraVis pies input PGM1.xlsx"
+# inputpath<-paste(path,excelfile,sep = "/")
+# read_excel(inputpath,
+#            which(grepl("meta",tolower(excel_sheets(inputpath)))))
+# read_excel(inputpath,
+#            which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
+#   colnames()
+# sample_column <-"Sample"
+# factor_column <- "Condition"   #"None" if not present, or 1 or two element vector
+# comparative_factor_column <- "Supplementation"   #"None" if not present, factor on each level of which the first factor is compared
+# norm_column <- "Normalisation"   #"None" if not present
+# sampletype_column<-"sample_type"
 
 
 #Miscellaneous
 P_isotopologues<-T                    #leave at false, only input fraction contribution data 
 log_abund<-F
 detail_charts<-T                      #makes images with detail for solo use
-pathway_charts<-F                        #also generate images fit for pathway 
+pathway_charts<-T                        #also generate images fit for pathway 
 save_chart<-T                         #save chart images? If false plots in ID
 normalize<-(length(norm_column)>0)                         #normalize abundances?
 print_tables<-F                       #print generated tables to console?
 compounds<-NULL                      #which compounds included; NULL => all
 show_P<-T                              #show P values on pie plots
 
-#figure appearance parameters
+#figure appearance parameters if not specified in project
 #any color input recognized by ggplot2::scale_fill_manual can be used
-col_labeling<-c("#ffd966","#bfbfbf")   #colors for labeled and unlabeled fraction 
-col_labeling<-c("lightblue","#ffd966","#bfbfbf")   #colors for 2 tracers and unlabeled fraction
+if (length(col_labeling)==0) col_labeling<-
+  c("#ffd966","#bfbfbf")   #colors for labeled and unlabeled fraction 
 maxcol_facet<-3                       #maximum amount of images horizontal
 include_name<-T                        #include compound name on figure
 include_legend<-T                      #include legend on figure
@@ -311,150 +326,58 @@ format<-"png"
 
 
 # Code merging data-------------------------------------------------------------------
-#todo troubleshoot joining code
-# tb<-dolly_to_longtibble(path,inputpath,metastring = metastring,
-#                         abundstring = abundstring,labelstring = labelstring,
-#                         isostring = isostring,
-#                         sample_column = sample_column,
-#                         factor_column = factor_column,
-#                         comparative_factor_column = 
-#                           comparative_factor_column,
-#                         norm_column = norm_column,
-#                         tracer_column = tracer_column,
-#                         sampletype_column = sampletype_column,lib_tb = lib_tb)
+tb<-dolly_to_longtibble(path,inputpath,metastring = metastring,
+                        abundstring = abundstring,labelstring = labelstring,
+                        isostring = isostring,
+                        sample_column = sample_column,
+                        factor_column = factor_column,
+                        comparative_factor_column =
+                          comparative_factor_column,
+                        factor_levels_ordered = factor_levels_ordered,
+                        norm_column = norm_column,
+                        tracer_column = tracer_column,
+                        sampletype_column = sampletype_column,lib_tb = lib_tb,
+                        savedata=T)
 
-#make symbols for dplyr pipelines
-factor_columns <- c(factor_column,comparative_factor_column)
-factor_symbols<-sym_or_null(factor_columns,returnlist = T)
-factor_symbol<-factor_symbols[[1]]
-if(length(factor_symbols)==2) compar_factor_symbol<-factor_symbols[[2]] else {
-  compar_factor_symbol<-NULL
-}
-sample_symbol<-sym_or_null(sample_column,allownull = F)
-tracer_symbol<-sym_or_null(tracer_column)
-norm_symbol<-sym_or_null(norm_column)
-sampletype_symbol<-sym_or_null(sampletype_column)
+# print(paste(unique(tb$datatype)))
+# Function pies ---------------------------------------------
+# undebug(add_FClabels)
+# debug(make_FC_slices)
+# debug(summarise_piedata)
 
-input_list<-
-  list_inputdata_tbs(inputpath,metastring = metastring,
-                     abundstring = abundstring,labelstring = labelstring,
-                     isostring = isostring,sample_column = sample_column,
-                     factor_columns = factor_columns,
-                     norm_column = norm_column,
-                     tracer_column = tracer_column,
-                     sampletype_column = sampletype_column,lib_tb = lib_tb)
+generate_pies(tb,detail_charts=detail_charts,
+              pathway_charts=pathway_charts,
+              savepath=savepath,
+              normalize=normalize,
+              factor_columns=factor_columns,
+              factor_order=factor_order,
+              tracer_column=tracer_column,
+              P_isotopologues=P_isotopologues,
+              log_abund=log_abund,
+              label_decimals=label_decimals,
+              percent_add=percent_add,
+              FC_position=FC_position,
+              min_lab_dist=min_lab_dist,
+              circlelinecolor=circlelinecolor,
+              circlelinetypes=circlelinetypes,
+              maxcol_facet=maxcol_facet,
+              include_name=include_name,
+              show_P=show_P,
+              col_labeling=col_labeling,
+              alpha=alpha,
+              otherfontsize=otherfontsize,
+              font=font,
+              legendtitlesize=legendtitlesize,
+              cohortsize=cohortsize,
+              include_legend=include_legend,
+              format=format,
+              mapotherfontsize=mapotherfontsize,
+              mapcohortsize=mapcohortsize)  
 
-#if no fractional contribution data present, 
-#calculate from isotopologue data
-if(!"frac_tb"%in% names(input_list)) {
-  #calculate fractional contribution
-  frac_worktb<-extract_col_isotopologues(input_list$iso_tb,
-                                         iso_suffix_sep = "_")%>%
-    select(-datatype)%>%
-    calculate_FC()
-
-} else frac_worktb<-input_list$frac_tb
-
-#do checks on input data
-#generate error or warning messages if any
-check_output<-check_samples_compounds(
-  meta_tb = input_list$meta_tb,
-  abund_tb = input_list$abund_tb,
-  frac_tb = frac_worktb,
-  sample_column = sample_column,
-  norm_column = norm_column)
-
-if (check_output$error) {
-  validate(check_output$message)
-} else {
-  outputtext<-check_output$message
-}
-
-#curate abundance data, save LOD data if present and note which compounds
-#are detected in less samples than required
-#detected too little
-abund_worktb<-input_list$abund_tb%>%
-  curate_abundancedata(meta_tb=input_list$meta_tb,sample_column = sample_column,
-                       norm_column = norm_column,
-                       sampletype_column = sampletype_column)%>%
-  select(-any_of(c(sampletype_column,norm_column)))
-
-compounds_toomany_undetected<-character(0)
-if("detected" %in% colnames(abund_worktb)){
-  abund_LODtb<-abund_worktb%>%
-    select(!!sample_symbol,compound,detected,any_of(c("LOD","LOD_blankcor")))%>%
-    group_by(compound) %>%
-    summarise(detected_fraction=length(which(detected))/n())%>%
-    left_join(
-      abund_worktb%>%
-        select(compound,any_of(c("LOD","LOD_blankcor")))%>%
-        unique(),
-      by="compound")
-  
-  compounds_toomany_undetected<-abund_LODtb%>%
-    filter(detected_fraction<minfract_detected)%>%
-    pull(compound)
-  
-  write_csv(abund_LODtb,paste0(path,"/LOD and compound detection table.csv"))
-}
-
-if(length(compounds_toomany_undetected)>0){
-  print(paste0("Following compounds are below LOD in more than ",
-               (1-minfract_detected)*100,"% of the samples."))
-}
-#transform abundance data to long format, saving all found types of abundance
-#with the common name
-abund_longtb<-abund_worktb%>%
-  filter(!compound %in% compounds_toomany_undetected)%>%
-  select(!!sample_symbol,
-         compound,any_of(c("Abund","BlankcorAbund","NormAbund")))%>%
-  pivot_longer(any_of(c("Abund","BlankcorAbund","NormAbund")),
-               names_to = "datatype",values_to = "value")
-
-#transform isotopologue and fraccon data to long format, saving all found types
-#of abundance with the common name, and dropping any samples or compounds not
-#in abund_longtb
-if("iso_tb"%in% names(input_list)) {
-  iso_longtb<-extract_col_isotopologues(input_list$iso_tb,
-                                        iso_suffix_sep = "_")%>%
-    select(-Isotopologue)%>%
-    filter(compound %in% abund_longtb$compound,
-           !!sample_symbol %in% pull(abund_longtb,sample_column))
-} else iso_longtb<-NULL
-
-frac_longtb<-frac_worktb %>% 
-  pivot_longer(2:ncol(.),names_to = "compound",values_to = "value")%>%
-  mutate(datatype="FracCont",.before = 3)%>%
-  filter(compound %in% abund_longtb$compound,
-         !!sample_symbol %in% pull(abund_longtb,sample_column))
-
-
-#transform metatb for joining to long tibble
-input_list$meta_tb%>%
-  select(-any_of(c(sampletype_column,norm_column)))
-
-
-meta_tb<-input_list$meta_tb%>%
-  {
-    if(length(sampletype_column)>0){
-      if(sampletype_column %in% colnames(.)) {
-        filter(.,!!sampletype_symbol != "blank")
-      } else .
-    } else .
-  }%>%
-  select(-any_of(c(sampletype_column,norm_column)))
-
-#join all data, keeping meta for last, then  drop unused factor
-# levels and reorder them like input if specified(like those of blanks!)
-#todo turn joinin series into function
-tb<-join_metabo_longdata(abund_longtb,frac_longtb,iso_longtb,meta_tb,
-                         sample_column = sample_column)%>%
-  clean_order_factors(factor_columns,factor_levels_ordered)
-
+#todo add code to generate caption
+# create_caption<-function(factor_order,log_abund,circlelinetypes,FC_position,show_P,
+#                          P_isotopologues) {
 # Code pies ---------------------------------------------
-#todo load tb, display columns, clean factors with clean_order_factors
-
-
 #derive variables used later on
 factor_columns <- c(factor_column,comparative_factor_column)
 factor_symbols<-sym_or_null(factor_columns,returnlist = T)
@@ -469,7 +392,7 @@ if(length(tracer_column)>0){
       FC_position =="center") {
     FC_position <- "slice"
     print(paste0("As multiple tracers are supplied, FC will be displayed in ",
-    "the slice."))
+                 "the slice."))
   }
   
   #checks if the right amount of colors is set, sets right amount of default 
@@ -503,16 +426,10 @@ if(length(tracer_column)>0){
 
 #prepare summarized table with means and p values of differences
 #of selected factor levels with desired factor order
-# undebug(prepare_piedata)
-# undebug(kruskal.test)
-# undebug(kruskal_piedata)
-# undebug(clean_order_factors)
 # undebug(summarise_piedata)
-
-#todo for some reason fraccon and isotopologue data kruskal wallis is 
-#not working because all cohorts are the same??
+# debug(kruskal_piedata)
 sum_tb<-tb %>%
-  # filter(compound=="(2 and/or 3-)Phosphoglyceric acid")%>%
+  filter(compound=="Glucose-6-phosphate 1mox 4prop")%>%
 
   #Select only desired columns and filter only supported datatypes.
   #Extract data only for desired factor levels and set factor order
@@ -535,21 +452,24 @@ if(!any(grepl("iso",tolower(sum_tb$datatype)))) {
 } else if (length(nutrient_symbols)>1){
   if(exists("isoslice_tb")) rm("isoslice_tb")
   print(paste0("Isotopologues provided, but multiple tracer nutrients used. ",
-        "This is not supported currently, isotopologue data will be ignored"))
+               "This is not supported currently, isotopologue data will be ignored"))
 } else {
   isoslice_tb<- sum_tb%>%
     
     make_iso_slices(factor_columns=factor_columns, tracer_column = tracer_column)
   
+  #label factor name if any isotopologue has a significant difference, 
+  #regardless of comparative factor level
   signi_iso_tb<-isoslice_tb%>%
     mutate(iso_sign_label=if_else(P_FC>=0.05|is.na(P_FC),
                                   "",
                                   "*"))%>%
     select(compound,!!!factor_symbols,iso_sign_label)%>%
-    group_by(compound,!!!factor_symbols)%>%
+    group_by(compound,!!!factor_symbols[1])%>%
     summarise(iso_sign_label=if_else(any(iso_sign_label=="*"),
                                      "*",
                                      ""))
+  
   isos_calculated<-T
 }
 
@@ -573,72 +493,78 @@ FCslice_tb<- sum_tb%>%
     }
   }
 
-selected_compound<-unique(FCslice_tb$compound)[11]
-
-debug(make_piechart)
-make_piechart(FCslice_tb,
-                    factor_columns = factor_columns,
-                    tracer_column = tracer_column,
-                    log_abund=log_abund,
-                    circlelinecolor = circlelinecolor,selected_compound=
-                      unique(FCslice_tb$compound)[14],
-                    circlelinetypes = circlelinetypes,
-                    maxcol_facet = maxcol_facet,
-                    include_name = include_name,col_labeling = col_labeling,
-                    alpha=alpha,font=font,otherfontsize = otherfontsize,
-                    legendtitlesize =legendtitlesize,
-                    cohortsize = cohortsize,include_legend = include_legend,
-                    show_P=show_P)
-
-for(i in unique(FCslice_tb$compound)) {
-  pies<-make_piechart(FCslice_tb,
-                factor_columns = factor_columns,
-                tracer_column = tracer_column,
-                log_abund=log_abund,
-                circlelinecolor = circlelinecolor,selected_compound=i,
-                circlelinetypes = circlelinetypes,
-                maxcol_facet = maxcol_facet,
-                include_name = include_name,col_labeling = col_labeling,
-                alpha=alpha,font=font,otherfontsize = otherfontsize,
-                legendtitlesize =legendtitlesize,
-                cohortsize = cohortsize,include_legend = include_legend,
-                show_P=show_P)
+#loop over each compound in input tibble
+compounds<-unique(FCslice_tb$compound)
+for (compound in compounds) {
+  print(paste0("Processing compound ",which(compounds==compound),
+               " of ",length(compounds)))
   
-  plot(pies)
+  #prepare filename, remove problematic characters
+  if (normalize) {
+    plotfilename<-paste0("pies normalized ",compound,".",format)
+  } else {
+    plotfilename<-paste0("pies ",compound,".",format)
+  }
+  plotfilename<-gsub("/","-",plotfilename)
+  
+  if (detail_charts) {
+    #plot detailed chart based on information in slice table
+    print(paste0("saving detailed chart"))
+    
+    undebug(make_piechart)
+    pies<-make_piechart(FCslice_tb,
+                        factor_columns = factor_columns,
+                        tracer_column = tracer_column,
+                        log_abund=log_abund,
+                        circlelinecolor = circlelinecolor,
+                        selected_compound=compound,
+                        circlelinetypes = circlelinetypes,
+                        maxcol_facet = maxcol_facet,
+                        include_name = include_name,col_labeling = col_labeling,
+                        alpha=alpha,font=font,otherfontsize = otherfontsize,
+                        legendtitlesize =legendtitlesize,
+                        cohortsize = cohortsize,include_legend = include_legend,
+                        show_P=show_P)
+    
+    #save detailed pie chart for pathway if required
+    plotfilefolder<-paste0(savepath,"/Pie charts/")
+    plotfilepath<-paste0(plotfilefolder,plotfilename)
+    if (!dir.exists(plotfilefolder)) dir.create(paste0(plotfilefolder),
+                                                recursive = T)
+    ggsave(plotfilepath,pies,width=24.6,height=16,units = "cm",
+           device = format)
+  }
+  
+  if (pathway_charts) {
+    print(paste0("saving pathway chart"))
+    
+    #plot summary pie chart for pathway based on information in slice table
+    # debug(make_piechart)
+    pies<-make_piechart(FCslice_tb,
+                        factor_columns = factor_columns,
+                        tracer_column = tracer_column,
+                        log_abund=log_abund,
+                        circlelinecolor = circlelinecolor,
+                        selected_compound=compound,
+                        circlelinetypes = circlelinetypes,
+                        maxcol_facet = maxcol_facet,
+                        include_name = F,col_labeling = col_labeling,
+                        alpha=alpha,font=font,otherfontsize = mapotherfontsize,
+                        legendtitlesize =mapcohortsize,
+                        cohortsize = cohortsize,include_legend = F,
+                        show_P=show_P)
+    
+    #save summary pie chart for pathway if required
+    plotfilefolder<-paste0(savepath,"/Pie charts pathway/")
+    plotfilepath<-paste0(plotfilefolder,plotfilename)
+    if (!dir.exists(plotfilefolder)) dir.create(paste0(plotfilefolder),
+                                                recursive = T)
+    ggsave(plotfilepath,pies,width=24.6,height=16,units = "cm",
+           device = format)
+  }
+  print("Finished")
 }
-
-
-#todo make it work for isotopologue pies
-# make_piechart(isoslice_tb,factor_columns = factor_columns,
-#               tracer_column = "Isotopologue",
-#               log_abund=log_abund,
-#               circlelinecolor = circlelinecolor,selected_compound=selected_compound,
-#               circlelinetypes = circlelinetypes,
-#               maxcol_facet = maxcol_facet,
-#               include_name = include_name,col_labeling = NULL,
-#               alpha=alpha,font=font,otherfontsize = otherfontsize,
-#               legendtitlesize =legendtitlesize,
-#               cohortsize = cohortsize,include_legend = include_legend,
-#               show_P=show_P)
-
-
-
-
-
-# code saved for later figures from summarized longtb---------------------------------------------------------------------
-#pick normalized or not
-#prepare filename, remove problematic characters
-if (normalize) {
-  plotfilename<-paste0("pies normalized ",compound,".",format)
-  tb<-tb%>%
-    filter(datatype %in% c("FracCont","Isotopologues","NormAbund"))
-} else {
-  plotfilename<-paste0("pies ",compound,".",format)
-  tb<-tb%>%
-    filter(datatype %in% c("FracCont","Isotopologues","Abund"))
-}
-plotfilename<-gsub("/","-",plotfilename)
-
+pies
 
 # Overlay pies on map --------------------------------------------------------
 #how to assign coordinates: get bitmap format empty map, eg. import empty map template in r then export as png, use this as base empty map
@@ -1941,6 +1867,7 @@ make_piechart<-function(slice_tb,twofactor=twofactor,compound,
   
   return(pies)
 }
+
 
 
 # Generate pie chart plot for each compound and save if requested
