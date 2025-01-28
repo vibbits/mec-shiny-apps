@@ -90,7 +90,7 @@ sym_or_null<-function(vect,returnlist=F,allownull=T){
   return(symbol)
 }
 
-#extract metadata from an excel sheet
+#extract data from an excel sheet
 extract_excelsheet_tb<-function(excelpath,sheetnamestring,datatype_intended,
                                 samplename="Sample"){
   sample_symbol<-sym_or_null(samplename,allownull = F)
@@ -98,7 +98,9 @@ extract_excelsheet_tb<-function(excelpath,sheetnamestring,datatype_intended,
   sheetname<-excel_sheets(excelpath)[
     which(grepl(sheetnamestring,tolower(excel_sheets(excelpath))))]
   if(length(sheetname)==0) {
-    stop(paste0("No sheets with sheetnamestring in its name."))
+    warning(paste0("No sheets with sheetnamestring in its name. ",
+                   "Returning NULL"))
+    return(NULL)
   }
   if(length(sheetname)>1) {
     print(paste0("Multiple sheets with ",
@@ -247,10 +249,12 @@ list_inputdata_tbs<-function(inputpath,metastring="meta",abundstring="abund",
                                     datatype_intended = "abundance data",
                                     samplename = sample_column)
     
-    label_tb<-extract_excelsheet_tb(inputpath,
-                                    sheetnamestring = labelstring,
-                                    datatype_intended = "labeling data",
-                                    samplename = sample_column)
+    if(length(labelstring>0)) {
+      label_tb<-extract_excelsheet_tb(inputpath,
+                                      sheetnamestring = labelstring,
+                                      datatype_intended = "labeling data",
+                                      samplename = sample_column)
+    }
     
     
     
@@ -258,7 +262,11 @@ list_inputdata_tbs<-function(inputpath,metastring="meta",abundstring="abund",
   } else if(dir.exists(inputpath)) {
     meta_tb<-loadfile_stringmatch(inputpath,metastring)
     abund_tb<-loadfile_stringmatch(inputpath,abundstring)
-    label_tb<-loadfile_stringmatch(inputpath,labelstring)
+    
+    if(length(labelstring>0)) {
+      label_tb<-loadfile_stringmatch(inputpath,labelstring)
+    }
+    
     
   } else stop(paste0(inputpath ,"not found. Please specify an existing folder or ",
                      "excel file. For the latter, make sure the path contains ",
@@ -284,27 +292,29 @@ list_inputdata_tbs<-function(inputpath,metastring="meta",abundstring="abund",
                       na.omit()
   )
   
-  #clean labeling data to remove empty rows and columns, and make sure
-  #labeling is a numerical fraction in case input is a % character
-  #rename compounds by library if provided
-  label_tb<-label_tb%>%
-    select(where(~ !all(is.na(.))))%>%
-    na.omit()%>%
-    mutate(across(where(~any(grepl("%",.x,fixed=T))),function(x) 
-      as.numeric(sub(pattern="%", replacement = "",x,fixed = T))/100))%>%
-    rename_lib(lib_tb)
-  
-  #rename labeling data to FC or iso and clean names accordingly depending on
-  #whether an isotopologue string is found in the column names
-  if(is_isodata(label_tb,isostring = isostring)) {
-    output_list$iso_tb<-label_tb %>%
-      rename_with(replace_except_last,
-                  .cols=-any_of(colnames(meta_tb)))
-      
-  } else {
-    output_list$frac_tb<-label_tb %>%
-      rename_with(~gsub("_"," ",.x),
-                  .cols=-any_of(colnames(meta_tb)))
+  if(length(labelstring>0)) {
+    #clean labeling data to remove empty rows and columns, and make sure
+    #labeling is a numerical fraction in case input is a % character
+    #rename compounds by library if provided
+    label_tb<-label_tb%>%
+      select(where(~ !all(is.na(.))))%>%
+      na.omit()%>%
+      mutate(across(where(~any(grepl("%",.x,fixed=T))),function(x) 
+        as.numeric(sub(pattern="%", replacement = "",x,fixed = T))/100))%>%
+      rename_lib(lib_tb)
+    
+    #rename labeling data to FC or iso and clean names accordingly depending on
+    #whether an isotopologue string is found in the column names
+    if(is_isodata(label_tb,isostring = isostring)) {
+      output_list$iso_tb<-label_tb %>%
+        rename_with(replace_except_last,
+                    .cols=-any_of(colnames(meta_tb)))
+        
+    } else {
+      output_list$frac_tb<-label_tb %>%
+        rename_with(~gsub("_"," ",.x),
+                    .cols=-any_of(colnames(meta_tb)))
+    }
   }
   return(output_list)
 }
@@ -680,7 +690,12 @@ join_metabo_longdata<-function(abund_longtb,frac_longtb,iso_longtb=NULL,meta_tb,
                     sample_column){
   sample_symbol<-sym_or_null(sample_column)
   
-  tb<-full_join(abund_longtb,frac_longtb)%>%
+  tb<-abund_longtb%>%
+    {
+      if(length(frac_longtb)>0){
+        full_join(.,frac_longtb)
+      } else .
+    }%>%
     {
       if(length(iso_longtb)>0){
         full_join(.,iso_longtb)
@@ -728,16 +743,21 @@ dolly_to_longtibble<-function(path,inputpath,metastring="meta",
                        sampletype_column = sampletype_column,lib_tb = lib_tb)
   
   #if no fractional contribution data present, 
-  #calculate from isotopologue data
-  if(!"frac_tb"%in% names(input_list)) {
+  #calculate from isotopologue data, if that is also not present, put placeholder
+  #tb to be able to use old code, with only sample names
+  if("frac_tb"%in% names(input_list)) {
+    frac_worktb<-input_list$frac_tb
+    
+    
+  } else if("iso_tb"%in% names(input_list)) {
     #calculate fractional contribution
     frac_worktb<-extract_col_isotopologues(input_list$iso_tb,
                                            iso_suffix_sep = "_",
                                            sample_column=sample_column)%>%
-      select(-datatype)%>%
-      calculate_FC(sample_column=sample_column)
-    
-  } else frac_worktb<-input_list$frac_tb
+    select(-datatype)%>%
+    calculate_FC(sample_column=sample_column)
+  } else frac_worktb<-input_list$meta_tb %>%
+    select(!!sample_symbol)
   
   #do checks on input data
   #generate error or warning messages if any
@@ -805,11 +825,15 @@ dolly_to_longtibble<-function(path,inputpath,metastring="meta",
              !!sample_symbol %in% pull(abund_longtb,sample_column))
   } else iso_longtb<-NULL
   
-  frac_longtb<-frac_worktb %>% 
-    pivot_longer(2:ncol(.),names_to = "compound",values_to = "value")%>%
-    mutate(datatype="FracCont",.before = 3)%>%
-    filter(compound %in% abund_longtb$compound,
-           !!sample_symbol %in% pull(abund_longtb,sample_column))
+  #set fractional long tb to empty if no fractional contributions provided
+  if(ncol(frac_worktb)>1){
+    frac_longtb<-frac_worktb %>% 
+      pivot_longer(2:ncol(.),names_to = "compound",values_to = "value")%>%
+      mutate(datatype="FracCont",.before = 3)%>%
+      filter(compound %in% abund_longtb$compound,
+             !!sample_symbol %in% pull(abund_longtb,sample_column))
+  } else frac_longtb<-NULL
+  
   
   
   #transform metatb for joining to long tibble
