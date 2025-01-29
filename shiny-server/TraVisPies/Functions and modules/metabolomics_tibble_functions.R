@@ -98,7 +98,7 @@ extract_excelsheet_tb<-function(excelpath,sheetnamestring,datatype_intended,
   sheetname<-excel_sheets(excelpath)[
     which(grepl(sheetnamestring,tolower(excel_sheets(excelpath))))]
   if(length(sheetname)==0) {
-    warning(paste0("No sheets with sheetnamestring in its name. ",
+    warning(paste0("No sheet with ",sheetnamestring," in its name. ",
                    "Returning NULL"))
     return(NULL)
   }
@@ -200,18 +200,26 @@ is_isodata<-function(label_tb,isostring=NULL){
 #ideal to rename derivatised compounds to the original compound
 rename_lib<-function(data_tb,lib_tb=NULL,currentnamecol="compound",
                      newnamecol="Orig_name"){
+  currentcolsym<-sym_or_null(currentnamecol)
+  
   if(length(lib_tb)==0) {
     print("No library provided, using compound names as they are in input")
     return(data_tb)
   }
   
+  #order lib from long to shorter current names, so longer variants get tried 
+  #first (eg. L-Lactic_acid_2TMS_2 or L-Lactic_acid_2TMS_3  always replaced 
+  #before L-Lactic_acid_2TMS
+  lib_tb<-arrange(lib_tb,desc(nchar(!!currentcolsym)))
+  
+  #loop over library row and replace substrings in data columns
   if(any(colnames(lib_tb)==currentnamecol)&
      any(colnames(lib_tb)==newnamecol)) {
     for(i in 1:nrow(lib_tb)){
       colnames(data_tb)<-sub(lib_tb[i,currentnamecol],
-                              lib_tb[i,newnamecol],
-                              colnames(data_tb),
-                              fixed = T)
+                             lib_tb[i,newnamecol],
+                             colnames(data_tb),
+                             fixed = T)
     }  
   } else warning(paste0("Renaming requested by naming columns not found in ",
                         "library, continue without renaming"))
@@ -243,6 +251,10 @@ list_inputdata_tbs<-function(inputpath,metastring="meta",abundstring="abund",
                                              sheetnamestring = metastring,
                                              datatype_intended = "metadata",
                                              samplename = sample_column)
+    
+    if(length(meta_tb)==0) {
+      stop("Provide right metadata sheet name, make sure sheet is present.")
+    }
     
     abund_tb<-extract_excelsheet_tb(inputpath,
                                     sheetnamestring = abundstring,
