@@ -4,8 +4,6 @@
 #Vlaams Instituut voor Biotechnologie (VIB) and KULeuven
 #Metabolomics Expertise Center (MEC)
 
-#note: this non-shiny code does not yet support input with isotopologue data
-#please use fraction contribution input instead
 
 ###Summary: This code aims to produce the pie charts plots proposed in the 
 # TraVis Pies: A Guide for Stable Isotope Metabolomics Interpretation Using an 

@@ -1,0 +1,118 @@
+---
+title: "TraVisPies_notebook"
+author: "Sam De Craemer"
+date: "`r Sys.Date()`"
+output: html_TraVisPies_notebook
+---
+# This code aims to produce the pie charts plots proposed in the
+# TraVis Pies: A Guide for Stable Isotope Metabolomics Interpretation Using an 
+# Intuitive Visualization, based on 3 input files:metadata, raw abundance and fractional
+# contribution. It is in addition possible to overlay them on a metabolic map 
+# image if desired. In addition to the one-factor plots proposed in the article, 
+# two-factor plotting is also available where the rows and columns of pie charts 
+# in the final plot each correspond to a different factor.All of this can also
+# be done for data including more than one tracer.
+# The plots are generated using ggplot2 for each compound in the input data,
+# several other tidyverse packages are used to get the data in the right format
+# to generate the required figures.
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r functions and libs}
+# Functions and libraries ---------------------------------------------------------------
+#libraries for functions used
+library(here)    #to make r source from file location instead of magic stuff
+library(vroom)   #for error messages on box
+library(readxl)       #for reading excel files
+library(forcats)      #for factor manipulation
+library(dplyr)        #for faster.easier manipulation of data
+library(tibble)       #for manipulating tibbles
+library(readr)        #for writing .csv file of merged output
+library(tidyr)        #for restructuring data tibbles
+library(broom)        #for using regression models in dplyr pipes
+library(ggplot2)      #for generating the pie chart plots
+
+#load functions to support the app 
+source(here::here("Functions and modules/metabolomics_tibble_functions.R"))
+source(here::here("Functions and modules/TraVis_Pies_functions.R"))
+```
+
+
+```{r input general and filepath}
+#Data file locations and specifications
+#rawpath is windows copied folder with files, need this command to properly 
+#read in R without having to modify the strings by hand
+#example: rawpath<-r"(C:\User\Projects\Pie charts)"
+#can also specify relative to the project folder using the here::here command
+
+#set optional variables to NULL, functions designed to handle absence
+isostring<-comparative_factor_column<-sampletype_column<-factor_column <- norm_column <- 
+  tracer_column<-inputtype<-libfile<-lib_tb<-factor_levels_ordered<-col_labeling<-NULL
+
+#set required variables to a default value that can be changed for specific 
+#projects further in input
+metastring<-"meta"
+abundstring<-"abund"
+labelstring<-"iso"
+minfract_detected<-0
+
+#set filepath and check metadata
+path<-here::here("Example_data/Experimental examples for nonUI app/Excel_1factor_1tracer")
+savepath<-path
+excelfile<-"example excel.xlsx"
+inputpath<-paste(path,excelfile,sep = "/")
+read_excel(inputpath,
+           which(grepl("meta",tolower(excel_sheets(inputpath)))))
+```
+
+```{r input metadata}
+#set metadata variables
+sample_column <-"Sample"
+factor_column <- "cohort"   #"None" if not present, or 1 or two element vector
+norm_column <- "Normalisation"   #"None" if not present
+sampletype_column<-"sample_type"
+(factor_levels<-read_excel(inputpath,
+           which(grepl("meta",tolower(excel_sheets(inputpath)))))%>%
+  pull(factor_column)%>%
+  unique())
+
+#set factor levels variables
+factor_levels_ordered<-factor_levels[2:4]
+
+print(paste0("Selected levels in order as given in factor_levels_ordered: ",paste0(factor_levels_ordered,collapse = ", ")))
+```
+
+```{r labeling check}
+#set 
+isostring<-"_C13-0"
+read_excel(inputpath,
+           which(grepl("iso",tolower(excel_sheets(inputpath)))))%>%
+  colnames()
+```
+
+```{r libfile}
+#load file or quote if not required so it remains NULL
+libfile<-"Lib_excelexample.csv"
+lib_tb<-vroom::vroom(paste0(path,"/",libfile),delim = ",")
+```
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
