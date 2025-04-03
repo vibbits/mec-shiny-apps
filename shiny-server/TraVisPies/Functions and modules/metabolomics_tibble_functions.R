@@ -755,8 +755,8 @@ dolly_to_longtibble<-function(path,inputpath,metastring="meta",
                        sampletype_column = sampletype_column,lib_tb = lib_tb)
   
   #if no fractional contribution data present, 
-  #calculate from isotopologue data, if that is also not present, put placeholder
-  #tb to be able to use old code, with only sample names
+  #calculate from isotopologue data, if that is also not present, put tb with FC
+  #0 in all columns
   if("frac_tb"%in% names(input_list)) {
     frac_worktb<-input_list$frac_tb
     
@@ -838,8 +838,16 @@ dolly_to_longtibble<-function(path,inputpath,metastring="meta",
   } else iso_longtb<-NULL
   
   #set fractional long tb to empty if no fractional contributions provided
+  #add columns in abundance data missing from fractional contribution data
+  #setting contribution to 0
+  missing_comps<-unique(abund_longtb$compound)[
+    which(!unique(abund_longtb$compound) %in% colnames(frac_worktb))]
+  new_cols <- rlang::set_names(rep(0, length(missing_comps)), missing_comps)
+  
   if(ncol(frac_worktb)>1){
     frac_longtb<-frac_worktb %>% 
+      add_column(!!!new_cols)%>%
+      mutate(across(missing_comps),0)%>%
       pivot_longer(2:ncol(.),names_to = "compound",values_to = "value")%>%
       mutate(datatype="FracCont",.before = 3)%>%
       filter(compound %in% abund_longtb$compound,

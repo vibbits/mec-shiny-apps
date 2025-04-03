@@ -546,6 +546,9 @@ MCF002044_001,0,Sorbitol,FracCont,0.0013815233636517085
 MCF002044_001,0,Stearic acid,FracCont,1.0437861728697128e-4
 MCF002044_001,0,Succinic acid,FracCont,0
 MCF002044_001,0,a-Ketobutyric acid,FracCont,0
+MCF002044_001,0,13C5-D5-15N Glutamic acid,FracCont,0
+MCF002044_001,0,D7-Glucose,FracCont,0
+MCF002044_001,0,Myristic acid d27,FracCont,0
 MCF002044_002,0,(2 and/or 3-)Phosphoglyceric acid,FracCont,0.01014037738391338
 MCF002044_002,0,(S)-a-Acetolactic Acid,FracCont,0
 MCF002044_002,0,"2,3-dihydroxyisovalerate",FracCont,0
@@ -598,6 +601,9 @@ MCF002044_002,0,Sorbitol,FracCont,0.001819545327032412
 MCF002044_002,0,Stearic acid,FracCont,2.942505748190489e-4
 MCF002044_002,0,Succinic acid,FracCont,0
 MCF002044_002,0,a-Ketobutyric acid,FracCont,0.006213847265236986
+MCF002044_002,0,13C5-D5-15N Glutamic acid,FracCont,0
+MCF002044_002,0,D7-Glucose,FracCont,0
+MCF002044_002,0,Myristic acid d27,FracCont,0
 MCF002044_003,0,(2 and/or 3-)Phosphoglyceric acid,FracCont,0.001038927026111202
 MCF002044_003,0,(S)-a-Acetolactic Acid,FracCont,0
 MCF002044_003,0,"2,3-dihydroxyisovalerate",FracCont,0
@@ -650,6 +656,9 @@ MCF002044_003,0,Sorbitol,FracCont,4.6418986514283963e-4
 MCF002044_003,0,Stearic acid,FracCont,4.3597589697547346e-4
 MCF002044_003,0,Succinic acid,FracCont,0
 MCF002044_003,0,a-Ketobutyric acid,FracCont,0
+MCF002044_003,0,13C5-D5-15N Glutamic acid,FracCont,0
+MCF002044_003,0,D7-Glucose,FracCont,0
+MCF002044_003,0,Myristic acid d27,FracCont,0
 MCF002044_001,0,2-Phosphoglyceric acid,Isotopologue_C13-0,1.281809112505205
 MCF002044_002,0,2-Phosphoglyceric acid,Isotopologue_C13-0,1.192065791740407
 MCF002044_003,0,2-Phosphoglyceric acid,Isotopologue_C13-0,1.092966446796123
@@ -2223,6 +2232,9 @@ MCF002044_004,0.5,Sorbitol,FracCont,0.006477174267225137
 MCF002044_004,0.5,Stearic acid,FracCont,8.670186583343054e-5
 MCF002044_004,0.5,Succinic acid,FracCont,6.139588263246755e-4
 MCF002044_004,0.5,a-Ketobutyric acid,FracCont,0.006213847265236986
+MCF002044_004,0.5,13C5-D5-15N Glutamic acid,FracCont,0
+MCF002044_004,0.5,D7-Glucose,FracCont,0
+MCF002044_004,0.5,Myristic acid d27,FracCont,0
 MCF002044_005,0.5,(2 and/or 3-)Phosphoglyceric acid,FracCont,0.08188405156146335
 MCF002044_005,0.5,(S)-a-Acetolactic Acid,FracCont,0
 MCF002044_005,0.5,"2,3-dihydroxyisovalerate",FracCont,0
@@ -2275,6 +2287,9 @@ MCF002044_005,0.5,Sorbitol,FracCont,0.009993780350489761
 MCF002044_005,0.5,Stearic acid,FracCont,4.357218810258883e-4
 MCF002044_005,0.5,Succinic acid,FracCont,7.17016072526176e-6
 MCF002044_005,0.5,a-Ketobutyric acid,FracCont,0
+MCF002044_005,0.5,13C5-D5-15N Glutamic acid,FracCont,0
+MCF002044_005,0.5,D7-Glucose,FracCont,0
+MCF002044_005,0.5,Myristic acid d27,FracCont,0
 MCF002044_006,0.5,(2 and/or 3-)Phosphoglyceric acid,FracCont,0.06743937058012783
 MCF002044_006,0.5,(S)-a-Acetolactic Acid,FracCont,0
 MCF002044_006,0.5,"2,3-dihydroxyisovalerate",FracCont,0
@@ -2327,6 +2342,9 @@ MCF002044_006,0.5,Sorbitol,FracCont,0.005441504133654768
 MCF002044_006,0.5,Stearic acid,FracCont,2.746393344173968e-4
 MCF002044_006,0.5,Succinic acid,FracCont,2.303133785965415e-5
 MCF002044_006,0.5,a-Ketobutyric acid,FracCont,0
+MCF002044_006,0.5,13C5-D5-15N Glutamic acid,FracCont,0
+MCF002044_006,0.5,D7-Glucose,FracCont,0
+MCF002044_006,0.5,Myristic acid d27,FracCont,0
 MCF002044_004,0.5,2-Phosphoglyceric acid,Isotopologue_C13-0,0.9326388790863127
 MCF002044_005,0.5,2-Phosphoglyceric acid,Isotopologue_C13-0,0.9843718002413766
 MCF002044_006,0.5,2-Phosphoglyceric acid,Isotopologue_C13-0,1.005425946827944
@@ -3900,6 +3918,9 @@ MCF002044_007,1,Sorbitol,FracCont,0.011017337291459104
 MCF002044_007,1,Stearic acid,FracCont,4.2235612153254215e-4
 MCF002044_007,1,Succinic acid,FracCont,0
 MCF002044_007,1,a-Ketobutyric acid,FracCont,0
+MCF002044_007,1,13C5-D5-15N Glutamic acid,FracCont,0
+MCF002044_007,1,D7-Glucose,FracCont,0
+MCF002044_007,1,Myristic acid d27,FracCont,0
 MCF002044_008,1,(2 and/or 3-)Phosphoglyceric acid,FracCont,0.11964786237262791
 MCF002044_008,1,(S)-a-Acetolactic Acid,FracCont,0
 MCF002044_008,1,"2,3-dihydroxyisovalerate",FracCont,0
@@ -3952,6 +3973,9 @@ MCF002044_008,1,Sorbitol,FracCont,0.013041135120478506
 MCF002044_008,1,Stearic acid,FracCont,2.0405342844805196e-4
 MCF002044_008,1,Succinic acid,FracCont,0.001218475641249726
 MCF002044_008,1,a-Ketobutyric acid,FracCont,0
+MCF002044_008,1,13C5-D5-15N Glutamic acid,FracCont,0
+MCF002044_008,1,D7-Glucose,FracCont,0
+MCF002044_008,1,Myristic acid d27,FracCont,0
 MCF002044_009,1,(2 and/or 3-)Phosphoglyceric acid,FracCont,0.1125075889136246
 MCF002044_009,1,(S)-a-Acetolactic Acid,FracCont,0
 MCF002044_009,1,"2,3-dihydroxyisovalerate",FracCont,0
@@ -4004,6 +4028,9 @@ MCF002044_009,1,Sorbitol,FracCont,0.01729284970229825
 MCF002044_009,1,Stearic acid,FracCont,4.990299061444365e-4
 MCF002044_009,1,Succinic acid,FracCont,0.003670700572136298
 MCF002044_009,1,a-Ketobutyric acid,FracCont,0.006213847265236985
+MCF002044_009,1,13C5-D5-15N Glutamic acid,FracCont,0
+MCF002044_009,1,D7-Glucose,FracCont,0
+MCF002044_009,1,Myristic acid d27,FracCont,0
 MCF002044_007,1,2-Phosphoglyceric acid,Isotopologue_C13-0,0.9191719920646418
 MCF002044_008,1,2-Phosphoglyceric acid,Isotopologue_C13-0,0.9670942203655236
 MCF002044_009,1,2-Phosphoglyceric acid,Isotopologue_C13-0,0.9625497096265312
